@@ -65,7 +65,7 @@ Hệ thống gồm frontend web, backend REST API, cơ sở dữ liệu NoSQL v�
 - Backend: Node.js + Express
 - Database: MongoDB
 - Realtime: Firebase
-- Bản đồ: Google Maps JavaScript API
+- Bản đồ: OpenStreetMap + Leaflet
 
 ---
 
