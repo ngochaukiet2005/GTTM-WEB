@@ -2,30 +2,32 @@ import React, { useState, useMemo, useEffect } from 'react';
 import AppMap from "../map/AppMap"; 
 import { mockService } from '../../services/mockApi';
 
-const BUS_STATION_LOCATION = {
-  lat: 10.762622, 
-  lng: 106.660172,
-  address: "Bến Xe Trung Tâm (Cố định)"
+// 👇 CẬP NHẬT: Tọa độ Bến xe Miền Tây (Kinh Dương Vương, Bình Tân)
+const BEN_XE_MIEN_TAY = {
+  lat: 10.742336, 
+  lng: 106.613876,
+  address: "Bến xe Miền Tây (395 Kinh Dương Vương)"
 };
 
 const PassengerHome = () => {
-  const [userLocation, setUserLocation] = useState(null);
-  const [isGoingToStation, setIsGoingToStation] = useState(false); 
+  // 'selectedPoint' là điểm khách chọn (khác bến xe)
+  // Mặc định null, khi GPS có thì fill vào, hoặc user click map
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  
+  const [isGoingToStation, setIsGoingToStation] = useState(false); // False = Rời bến (Mặc định)
   const [isBooking, setIsBooking] = useState(false);
   const [locating, setLocating] = useState(false);
 
-  // 👇 HÀM MỚI: Lấy địa chỉ từ Nominatim (Miễn phí)
+  // API lấy tên đường
   const getAddressFromNominatim = async (lat, lng) => {
     try {
       const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
       const response = await fetch(url);
       const data = await response.json();
-      
-      // Lấy tên đường hoặc địa chỉ hiển thị (display_name)
-      return data.display_name || "Không tìm thấy tên đường";
+      return data.display_name ? data.display_name.split(',').slice(0, 3).join(',') : "Vị trí đã chọn";
     } catch (error) {
-      console.error("Lỗi lấy địa chỉ:", error);
-      return "Lỗi kết nối bản đồ";
+      console.error("Lỗi:", error);
+      return "Lỗi bản đồ";
     }
   };
 
@@ -33,23 +35,17 @@ const PassengerHome = () => {
     handleGetLocation();
   }, []);
 
-  // Xử lý GPS và gọi Nominatim
   const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Trình duyệt không hỗ trợ GPS!");
-      return;
-    }
-
+    if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        
-        // Gọi API lấy địa chỉ
         const addressName = await getAddressFromNominatim(lat, lng);
         
-        setUserLocation({ lat, lng, address: addressName });
+        // Cập nhật điểm chọn bằng vị trí hiện tại
+        setSelectedPoint({ lat, lng, address: addressName });
         setLocating(false);
       },
       (error) => {
@@ -59,41 +55,30 @@ const PassengerHome = () => {
     );
   };
 
-  // Logic Click bản đồ: Nhận tọa độ -> Gọi API lấy địa chỉ -> Lưu state
-  const handleLocationSelect = async (type, { lat, lng }) => {
-    // 1. Hiển thị tạm thời trong lúc chờ API
-    setUserLocation({ lat, lng, address: "Đang lấy địa chỉ..." });
-    
-    // 2. Gọi API Nominatim
+  // Khi click vào bản đồ -> Cập nhật điểm chọn
+  const handleMapClick = async ({ lat, lng }) => {
+    setSelectedPoint({ lat, lng, address: "Đang lấy địa chỉ..." });
     const addressName = await getAddressFromNominatim(lat, lng);
-    
-    // 3. Cập nhật lại với địa chỉ thật
-    setUserLocation({ lat, lng, address: addressName });
+    setSelectedPoint({ lat, lng, address: addressName });
   };
 
-  // ... (Phần logic tính toán pickup/destination giữ nguyên) ...
-  const { pickup, destination } = useMemo(() => {
-    if (isGoingToStation) {
-      return { pickup: userLocation, destination: BUS_STATION_LOCATION };
-    } else {
-      return { pickup: BUS_STATION_LOCATION, destination: userLocation };
-    }
-  }, [userLocation, isGoingToStation]);
+  // Logic hiển thị trên Panel (Input)
+  const pickup = isGoingToStation ? selectedPoint : BEN_XE_MIEN_TAY;
+  const destination = isGoingToStation ? BEN_XE_MIEN_TAY : selectedPoint;
 
   const handleBooking = async () => {
-    if (!userLocation) return;
+    if (!selectedPoint) return;
     setIsBooking(true);
     try {
-      // Logic giả lập đặt xe
       await mockService.createTrip({
         passengerId: "u1",
         from: pickup,
         to: destination,
-        distance: "5km",
-        price: "50.000đ"
+        distance: "Calculating...", 
+        price: "Estimating..."
       });
-      alert(`🎉 Đặt xe thành công!\nTừ: ${pickup.address}\nĐến: ${destination.address}`);
-      setUserLocation(null); 
+      alert(`🎉 Đặt thành công!\nTừ: ${pickup.address}\nĐến: ${destination.address}`);
+      setSelectedPoint(null); // Reset
     } catch (error) {
       alert(error.message);
     } finally {
@@ -102,66 +87,101 @@ const PassengerHome = () => {
   };
 
   return (
-    <div className="relative h-screen w-full overflow-hidden">
+    <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-50">
       
-      {/* 1. BẢN ĐỒ (Leaflet) */}
+      {/* 1. BẢN ĐỒ */}
       <div className="absolute inset-0 z-0">
         <AppMap 
-          pickupLocation={pickup}
-          destinationLocation={destination}
-          center={userLocation} // Để map tự bay đến vị trí user
-          selectingType={isGoingToStation ? 'pickup' : 'destination'}
-          onLocationSelect={handleLocationSelect}
+          // 3 Điểm quan trọng
+          userLocation={null} // AppMap tự lo việc lấy GPS realtime
+          stationLocation={BEN_XE_MIEN_TAY} // Điểm cố định
+          selectedLocation={selectedPoint}  // Điểm linh hoạt
+          
+          isGoingToStation={isGoingToStation}
+          onLocationSelect={handleMapClick}
         />
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/20 to-transparent pointer-events-none md:hidden" />
       </div>
 
-      {/* 2. Nút GPS */}
-      <div className="absolute bottom-24 right-4 z-20">
-        <button onClick={handleGetLocation} className="bg-white p-3 rounded-full shadow-lg border hover:bg-blue-50">
-          <svg className={`h-6 w-6 text-blue-600 ${locating ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      {/* 2. NÚT ĐỊNH VỊ */}
+      <div className="absolute bottom-8 right-4 md:bottom-12 md:right-12 z-20">
+        <button 
+          onClick={handleGetLocation} 
+          className="group bg-white p-4 rounded-full shadow-xl border border-gray-100 text-gray-600 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all duration-300 flex items-center justify-center"
+        >
+          <svg className={`h-6 w-6 ${locating ? 'animate-spin text-blue-600' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
       </div>
 
-      {/* 3. UI Nhập liệu (Giữ nguyên UI cũ, chỉ thay đổi data binding) */}
-      <div className="absolute top-4 left-4 right-4 md:left-10 md:w-96 z-10">
-        <div className="bg-white rounded-xl shadow-xl p-5 border border-gray-100">
-          <h1 className="text-xl font-bold text-gray-800 mb-4">🚕 Đặt xe (OpenStreetMap)</h1>
-
-          <div className="relative flex flex-col gap-3 mb-4">
-             {/* Điểm Đón */}
-             <div className={`p-3 rounded-lg border flex flex-col justify-center min-h-[60px] ${pickup ? 'bg-white border-green-500' : 'bg-gray-50 border-gray-200'}`}>
-               <span className="text-[10px] font-bold text-green-600 uppercase">Điểm đón (A)</span>
-               <p className="text-sm font-semibold text-gray-800 line-clamp-2">
-                 {pickup ? pickup.address : "Chờ chọn..."}
-               </p>
-            </div>
-
-            {/* Nút đảo chiều */}
-            <div className="absolute top-1/2 left-[calc(50%-16px)] transform -translate-y-1/2 z-20">
-              <button onClick={() => setIsGoingToStation(!isGoingToStation)} className="w-8 h-8 bg-white border rounded-full shadow-md flex items-center justify-center text-gray-500 hover:text-blue-600">⇅</button>
-            </div>
-
-            {/* Điểm Trả */}
-            <div className={`p-3 rounded-lg border flex flex-col justify-center min-h-[60px] ${destination ? 'bg-white border-orange-500' : 'bg-gray-50 border-gray-200'}`}>
-               <span className="text-[10px] font-bold text-orange-600 uppercase">Điểm trả (B)</span>
-               <p className="text-sm font-semibold text-gray-800 line-clamp-2">
-                 {destination ? destination.address : "Chờ chọn..."}
-               </p>
-            </div>
+      {/* 3. PANEL ĐẶT XE */}
+      <div className="absolute top-4 left-4 right-4 md:left-12 md:top-12 md:w-[420px] z-10">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border border-white/20 animate-fade-in-down">
+          
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">
+              GTTM <span className="text-blue-600">Shuttle</span>
+            </h1>
+            <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full uppercase tracking-wider">
+              {isGoingToStation ? "Đến Bến" : "Rời Bến"}
+            </span>
           </div>
 
-          <button 
-            onClick={handleBooking}
-            disabled={!userLocation || isBooking}
-            className={`w-full py-3 text-white font-bold rounded-lg shadow-lg ${!userLocation ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}
-          >
-            {isBooking ? "Đang xử lý..." : "ĐẶT XE NGAY"}
-          </button>
-          
-          {!userLocation && <p className="text-center text-xs text-blue-500 mt-2">👇 Chạm vào bản đồ để chọn vị trí</p>}
+          <div className="relative bg-gray-50 rounded-xl p-4 border border-gray-200 shadow-inner">
+            <div className="absolute left-[29px] top-[34px] bottom-[34px] w-[2px] border-l-2 border-dashed border-gray-300 z-0 pointer-events-none"></div>
+
+            {/* ĐIỂM ĐÓN */}
+            <div className={`relative z-10 flex items-center gap-4 mb-4 ${!pickup ? 'opacity-50' : 'opacity-100'}`}>
+              <div className="w-4 h-4 rounded-full border-[3px] border-blue-500 bg-white shadow-sm flex-shrink-0"></div>
+              <div className="flex-1 min-w-0 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Điểm đón</p>
+                <p className="text-sm font-bold text-gray-800 break-words line-clamp-2 leading-tight">
+                  {pickup ? pickup.address : "..."}
+                </p>
+              </div>
+            </div>
+
+            {/* ĐIỂM ĐẾN */}
+            <div className={`relative z-10 flex items-center gap-4 ${!destination ? 'opacity-50' : 'opacity-100'}`}>
+              <div className="w-4 h-4 flex-shrink-0 text-red-500">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full drop-shadow-sm"><path fillRule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
+              </div>
+              <div className="flex-1 min-w-0 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Điểm trả</p>
+                <p className="text-sm font-bold text-gray-800 break-words line-clamp-2 leading-tight">
+                  {destination ? destination.address : "..."}
+                </p>
+              </div>
+            </div>
+
+            {/* NÚT ĐẢO CHIỀU */}
+            <button 
+              onClick={() => setIsGoingToStation(!isGoingToStation)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white p-2 rounded-full shadow-md border border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-100 hover:bg-blue-50 transition-all z-20"
+              title="Đảo chiều"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-6">
+            <button 
+              onClick={handleBooking}
+              disabled={!selectedPoint || isBooking}
+              className={`w-full py-4 px-6 rounded-xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2 ${(!selectedPoint || isBooking) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:shadow-blue-500/30 hover:-translate-y-1'}`}
+            >
+              {isBooking ? "Đang xử lý..." : "Đặt Chuyến Xe"}
+            </button>
+            {!selectedPoint && (
+              <p className="mt-4 text-center text-xs font-medium text-gray-400 animate-pulse">
+                👇 Chọn điểm {isGoingToStation ? 'đón' : 'trả'} trên bản đồ
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
