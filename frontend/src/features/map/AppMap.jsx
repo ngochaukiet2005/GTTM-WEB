@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
+
 const containerStyle = {
   width: '100%',
   height: '100%',
@@ -17,12 +18,12 @@ const AppMap = ({
   driverLocation,
   onLocationSelect,
   selectingType,
+  center // Nhận thêm prop center từ cha
 }) => {
   
-  // Thay API Key của bạn vào đây
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: "YOUR_GOOGLE_MAPS_API_KEY_HERE", 
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY, 
     libraries: ['places']
   });
 
@@ -44,6 +45,17 @@ const AppMap = ({
       onLocationSelect(selectingType, { lat, lng });
     }
   };
+
+  // 👇 LOGIC MỚI: Tự động pan bản đồ về center hoặc pickupLocation khi nó thay đổi
+  useEffect(() => {
+    if (map) {
+      // Ưu tiên theo thứ tự: center > pickup > driver > default
+      const targetLocation = center || pickupLocation || driverLocation;
+      if (targetLocation) {
+        map.panTo(targetLocation);
+      }
+    }
+  }, [map, center, pickupLocation, driverLocation]);
 
   useEffect(() => {
     if (pickupLocation && destinationLocation && window.google) {
@@ -68,13 +80,14 @@ const AppMap = ({
   return (
     <GoogleMap
       mapContainerStyle={containerStyle}
-      center={pickupLocation || driverLocation || defaultCenter}
+      // center ban đầu
+      center={defaultCenter} 
       zoom={15}
       onLoad={onLoad}
       onUnmount={onUnmount}
       onClick={handleMapClick}
       options={{
-        zoomControl: true,
+        zoomControl: false, // Ẩn nút zoom để giao diện sạch sẽ
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
