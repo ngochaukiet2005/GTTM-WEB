@@ -77,7 +77,7 @@ const PassengerBooking = () => {
     setSelectedPoint({ lat, lng, address: "Đang lấy địa chỉ..." });
     const addressName = await getAddressFromNominatim(lat, lng);
     setSelectedPoint({ lat, lng, address: addressName });
-    setEstimatedPrice("Calculating..."); 
+    setEstimatedPrice("Đang chờ..."); 
     setTimeout(() => setEstimatedPrice("30.000đ"), 500);
   };
 
