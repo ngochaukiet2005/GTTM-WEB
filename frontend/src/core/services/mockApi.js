@@ -1,4 +1,4 @@
-// src/services/mockApi.js
+// src/core/services/mockApi.js
 
 // ----------------------------------------------------------------------
 // 1. DATABASE GIẢ (Lưu trữ trong bộ nhớ tạm - RAM)
@@ -77,27 +77,6 @@ const MOCK_DB = {
       status: "cancelled",
       rating: 0,
       comment: ""
-    },
-    {
-      id: "trip_03",
-      date: "2024-03-18T09:00:00Z",
-      passengerId: "u1",
-      driver: { name: "Nguyễn Văn C", plate: "59Z1-456.78", phone: "0987654321" },
-      from: { 
-        lat: 10.752000, 
-        lng: 106.643000, 
-        address: "Công viên Phú Lâm" 
-      },
-      to: { 
-        lat: 10.757000, 
-        lng: 106.659000, 
-        address: "Bệnh viện Chợ Rẫy" 
-      },
-      distance: "6.1 km",
-      price: "55.000đ",
-      status: "completed",
-      rating: 4,
-      comment: "Đi hơi nhanh nhưng ok."
     }
   ]
 };
@@ -192,30 +171,67 @@ export const mockService = {
     return simulateNetwork(() => {
       const activeTrip = MOCK_DB.trips.find(t => 
         (t.passengerId === userId || !userId) && 
-        ['pending', 'accepted', 'running'].includes(t.status)
+        ['pending', 'accepted', 'arriving', 'running'].includes(t.status)
       );
       return activeTrip || null;
     });
   },
 
-  // 👇 MỚI: Gửi đánh giá
+  getPendingTrips: async () => {
+    return simulateNetwork(() => {
+      return MOCK_DB.trips.filter(t => t.status === 'pending');
+    });
+  },
+
+  acceptTrip: async (tripId, driverInfo) => {
+    return simulateNetwork(() => {
+      const trip = MOCK_DB.trips.find(t => t.id === tripId);
+      if (!trip) throw new Error("Chuyến không tồn tại");
+      trip.driver = driverInfo;
+      trip.status = 'accepted'; 
+      mockService.startSimulation(tripId);
+      return trip;
+    });
+  },
+
+  cancelTrip: async (tripId) => {
+    return simulateNetwork(() => {
+        const trip = MOCK_DB.trips.find(t => t.id === tripId);
+        if (!trip) throw new Error("Chuyến không tồn tại");
+        
+        if (['completed', 'cancelled'].includes(trip.status)) {
+            throw new Error("Không thể hủy chuyến này");
+        }
+
+        trip.status = 'cancelled';
+        console.log(`❌ Chuyến ${tripId} đã bị hủy bởi khách hàng.`);
+        return { success: true };
+    });
+  },
+
+  startSimulation: (tripId) => {
+    const trip = MOCK_DB.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    setTimeout(() => { if (trip.status === 'accepted') trip.status = 'arriving'; }, 5000);
+    setTimeout(() => { if (trip.status === 'arriving') trip.status = 'running'; }, 10000);
+    setTimeout(() => { if (trip.status === 'running') trip.status = 'completed'; }, 20000);
+  },
+
   submitReview: async (tripId, rating, comment) => {
     return simulateNetwork(() => {
       const trip = MOCK_DB.trips.find(t => t.id === tripId);
       if (trip) {
         trip.rating = rating;
         trip.comment = comment;
-        console.log(`⭐ Đánh giá chuyến ${tripId}: ${rating} sao - "${comment}"`);
         return { success: true };
       }
       return { success: false };
     });
   },
 
-  // 👇 MỚI: Admin lấy tất cả review
   getAllReviews: async () => {
     return simulateNetwork(() => {
-      // Lấy các chuyến đã hoàn thành và có đánh giá
       const reviews = MOCK_DB.trips
         .filter(t => t.status === 'completed' && t.rating > 0)
         .map(t => ({
