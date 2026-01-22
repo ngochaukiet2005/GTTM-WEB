@@ -8,11 +8,13 @@ const MOCK_DB = {
   users: [
     {
       id: "u1",
-      username: "khach",
+      username: "khach", // Giữ lại để tương thích ngược nếu cần
+      email: "khach@gmail.com",       // MỚI
+      phone: "0905123456",            // MỚI
       password: "123",
       fullName: "Nguyễn Văn Khách",
+      gender: "male",                 // MỚI
       role: "passenger",
-      phone: "0905123456",
       avatar: "https://ui-avatars.com/api/?name=Nguyen+Van+Khach&background=random"
     },
     {
@@ -34,23 +36,15 @@ const MOCK_DB = {
     }
   ],
 
-  // Dữ liệu mẫu cho lịch sử chuyến đi
+  // Dữ liệu mẫu cho lịch sử chuyến đi (GIỮ NGUYÊN)
   trips: [
     {
       id: "trip_01",
       date: "2024-03-20T08:30:00Z",
       passengerId: "u1",
       driver: { name: "Trần Tài Xế", plate: "59X1-123.45", phone: "0909888777" },
-      from: { 
-        lat: 10.742336, 
-        lng: 106.613876, 
-        address: "Bến xe Miền Tây, 395 Kinh Dương Vương" 
-      },
-      to: { 
-        lat: 10.744500, 
-        lng: 106.618000, 
-        address: "Aeon Mall Bình Tân, Số 1 Đường số 17A" 
-      },
+      from: { lat: 10.742336, lng: 106.613876, address: "Bến xe Miền Tây, 395 Kinh Dương Vương" },
+      to: { lat: 10.744500, lng: 106.618000, address: "Aeon Mall Bình Tân, Số 1 Đường số 17A" },
       distance: "1.2 km",
       price: "25.000đ",
       status: "completed",
@@ -58,20 +52,25 @@ const MOCK_DB = {
       comment: "Tài xế thân thiện, xe sạch."
     },
     {
+      id: "trip_test_rating",
+      date: "2024-03-25T10:30:00Z", 
+      passengerId: "u1",
+      driver: { name: "Phạm Văn Test", plate: "59Z1-888.88", phone: "0999888777" },
+      from: { lat: 10.7769, lng: 106.7009, address: "Chợ Bến Thành, Quận 1" },
+      to: { lat: 10.742336, lng: 106.613876, address: "Bến xe Miền Tây" },
+      distance: "8.5 km",
+      price: "70.000đ",
+      status: "completed",
+      rating: 0,
+      comment: ""
+    },
+    {
       id: "trip_02",
       date: "2024-03-19T14:15:00Z",
       passengerId: "u1",
       driver: { name: "Lê Văn B", plate: "59X2-999.99", phone: "0912345678" },
-      from: { 
-        lat: 10.755000, 
-        lng: 106.665000, 
-        address: "Đại học Y Dược TP.HCM" 
-      },
-      to: { 
-        lat: 10.742336, 
-        lng: 106.613876, 
-        address: "Bến xe Miền Tây" 
-      },
+      from: { lat: 10.755000, lng: 106.665000, address: "Đại học Y Dược TP.HCM" },
+      to: { lat: 10.742336, lng: 106.613876, address: "Bến xe Miền Tây" },
       distance: "5.4 km",
       price: "45.000đ",
       status: "cancelled",
@@ -103,11 +102,16 @@ const simulateNetwork = (callback) => {
 export const mockService = {
   
   // --- AUTHENTICATION ---
-  login: async (username, password, role) => {
+  
+  // SỬA: Login chấp nhận identifier là username, email hoặc phone
+  login: async (identifier, password, role) => {
     return simulateNetwork(() => {
-      const user = MOCK_DB.users.find(u => u.username === username && u.password === password);
+      const user = MOCK_DB.users.find(u => 
+        (u.username === identifier || u.email === identifier || u.phone === identifier) && 
+        u.password === password
+      );
       
-      if (!user) throw new Error("Sai tên đăng nhập hoặc mật khẩu!");
+      if (!user) throw new Error("Sai thông tin đăng nhập hoặc mật khẩu!");
       if (user.role !== role) throw new Error(`Tài khoản này không phải là ${role}!`);
       
       return { 
@@ -116,17 +120,28 @@ export const mockService = {
           id: user.id, 
           name: user.fullName, 
           role: user.role, 
-          avatar: user.avatar 
+          avatar: user.avatar,
+          phone: user.phone, // Trả thêm phone
+          email: user.email  // Trả thêm email
         } 
       };
     });
   },
 
+  // SỬA: Register kiểm tra trùng email/phone và lưu đầy đủ thông tin
   register: async (userData) => {
     return simulateNetwork(() => {
-      if (MOCK_DB.users.find(u => u.username === userData.username)) {
-        throw new Error("Tên đăng nhập đã tồn tại!");
+      // Kiểm tra trùng lặp
+      const existingUser = MOCK_DB.users.find(u => 
+        (userData.username && u.username === userData.username) ||
+        (userData.email && u.email === userData.email) ||
+        (userData.phone && u.phone === userData.phone)
+      );
+
+      if (existingUser) {
+        throw new Error("Tên đăng nhập, Email hoặc Số điện thoại đã tồn tại!");
       }
+
       const newUser = { 
         id: `u${Date.now()}`, 
         ...userData, 
@@ -134,11 +149,12 @@ export const mockService = {
         avatar: `https://ui-avatars.com/api/?name=${userData.fullName}&background=random`
       };
       MOCK_DB.users.push(newUser);
+      console.log("📍 [MOCK DB] User mới:", newUser);
       return newUser;
     });
   },
 
-  // --- TRIP (CHUYẾN XE) ---
+  // --- TRIP (CHUYẾN XE) - GIỮ NGUYÊN ---
 
   createTrip: async (tripData) => {
     return simulateNetwork(() => {
@@ -199,8 +215,8 @@ export const mockService = {
         const trip = MOCK_DB.trips.find(t => t.id === tripId);
         if (!trip) throw new Error("Chuyến không tồn tại");
         
-        if (['completed', 'cancelled'].includes(trip.status)) {
-            throw new Error("Không thể hủy chuyến này");
+        if (trip.status !== 'pending') {
+            throw new Error("Không thể hủy chuyến khi tài xế đã nhận hoặc chuyến đã kết thúc!");
         }
 
         trip.status = 'cancelled';

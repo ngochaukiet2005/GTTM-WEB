@@ -17,7 +17,7 @@ const TripHistory = () => {
   // State: Modal Thông báo thành công
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // State: Modal Xác nhận Hủy chuyến (Mới)
+  // State: Modal Xác nhận Hủy chuyến
   const [cancelModal, setCancelModal] = useState({ show: false, tripId: null });
 
   // Polling
@@ -52,7 +52,8 @@ const TripHistory = () => {
         setCancelModal({ show: false, tripId: null });
         mockService.getTripHistory('u1').then(setTrips); // Refresh ngay
     } catch (error) {
-        console.error(error);
+        alert(error.message); // Thông báo lỗi từ mockApi nếu cố tình hủy sai luật
+        setCancelModal({ show: false, tripId: null });
     }
   };
 
@@ -144,13 +145,16 @@ const TripHistory = () => {
                         </div>
                     </div>
 
-                    {trip.status === 'pending' && (
+                    {/* LOGIC HỦY: CHỈ HIỆN KHI PENDING */}
+                    {trip.status === 'pending' ? (
                         <button 
                             onClick={() => onRequestCancel(trip.id)}
                             className="px-4 py-2 bg-red-50 text-red-600 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors"
                         >
                             Hủy tìm
                         </button>
+                    ) : (
+                        <span className="text-xs font-medium text-gray-400 italic">Không thể hủy</span>
                     )}
                  </div>
               )}
@@ -159,28 +163,27 @@ const TripHistory = () => {
               {activeTab === 'history' && (
                 <div className="flex gap-3 w-full justify-end items-center relative z-30">
                   
-                  {/* Logic Nút Đánh giá (đã sửa lỗi không bấm được) */}
+                  {/* LOGIC ĐÁNH GIÁ */}
                   {trip.status === 'completed' && (
                       trip.rating && trip.rating > 0 ? (
-                        // Đã đánh giá -> Chỉ xem
+                        // Đã đánh giá -> Hiện số sao (Không click được)
                         <div className="flex items-center gap-1.5 bg-yellow-50 px-3 py-2 rounded-xl border border-yellow-100 cursor-default select-none">
                              <span className="text-yellow-500 text-sm">⭐</span>
-                             <span className="text-sm font-bold text-yellow-700">{trip.rating}</span>
-                             <span className="text-xs text-yellow-600/70">/ 5</span>
+                             <span className="text-sm font-bold text-yellow-700">{trip.rating} Sao</span>
                         </div>
                       ) : (
-                        // Chưa đánh giá -> Bấm được
+                        // Chưa đánh giá -> Nút màu vàng nổi bật
                         <button 
                             type="button"
                             onClick={(e) => {
-                                e.stopPropagation(); // Ngăn sự kiện nổi bọt nếu có
+                                e.stopPropagation();
                                 setRatingModal({ show: true, trip });
                                 setStar(5);
                                 setComment('');
                             }}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:border-yellow-400 hover:text-yellow-600 hover:shadow-md active:scale-95 transition-all cursor-pointer relative z-40"
+                            className="px-4 py-2 rounded-xl text-xs font-bold text-gray-900 bg-yellow-400 hover:bg-yellow-500 shadow-md hover:shadow-lg active:scale-95 transition-all cursor-pointer relative z-40"
                         >
-                            ⭐ Đánh giá ngay
+                            ⭐ Đánh giá
                         </button>
                       )
                   )}
@@ -206,7 +209,7 @@ const TripHistory = () => {
         )}
       </div>
 
-      {/* --- MODAL 1: XÁC NHẬN HỦY (Thay cho alert/window.confirm) --- */}
+      {/* --- MODAL 1: XÁC NHẬN HỦY --- */}
       {cancelModal.show && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
            <div className="bg-white rounded-[24px] p-6 w-full max-w-xs shadow-2xl animate-scale-up text-center">
@@ -214,7 +217,7 @@ const TripHistory = () => {
                  ⚠
               </div>
               <h3 className="text-lg font-bold text-gray-800 mb-2">Hủy tìm tài xế?</h3>
-              <p className="text-sm text-gray-500 mb-6">Bạn có chắc muốn hủy chuyến đi này không? Hành động này không thể hoàn tác.</p>
+              <p className="text-sm text-gray-500 mb-6">Bạn có chắc muốn hủy chuyến đi này không?</p>
               
               <div className="flex gap-3">
                  <button 
