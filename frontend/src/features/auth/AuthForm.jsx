@@ -1,7 +1,8 @@
 // src/features/auth/AuthForm.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // ✅ Thêm useEffect
 import { Link, useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2'; 
 import { mockService } from '../../core/services/mockApi'; 
 
 const AuthForm = ({ role, type }) => {
@@ -14,14 +15,28 @@ const AuthForm = ({ role, type }) => {
 
   // State quản lý input
   const [formData, setFormData] = useState({
-    username: '',        // Dùng cho Login (Email/Phone/Username)
+    username: '',        
     password: '',
     fullName: '',
-    email: '',           // Mới: Cho đăng ký
-    phone: '',           // Mới: Cho đăng ký
-    gender: 'male',      // Mới: Mặc định nam
-    confirmPassword: ''  // Mới: Xác nhận mật khẩu
+    email: '',           
+    phone: '',           
+    gender: 'male',      
+    confirmPassword: ''  
   });
+
+  // ✅ FIX: Reset form khi chuyển đổi giữa Login và Register (type thay đổi)
+  useEffect(() => {
+    setFormData({
+        username: '',        
+        password: '',
+        fullName: '',
+        email: '',           
+        phone: '',           
+        gender: 'male',      
+        confirmPassword: ''  
+    });
+    setError('');
+  }, [type, role]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -47,18 +62,15 @@ const AuthForm = ({ role, type }) => {
       } else {
         // --- 2. XỬ LÝ ĐĂNG KÝ (CHỈ PASSENGER) ---
         
-        // Kiểm tra mật khẩu khớp
         if (formData.password !== formData.confirmPassword) {
             throw new Error("Mật khẩu xác nhận không khớp!");
         }
-        // Kiểm tra độ dài sđt cơ bản
         if (role === 'passenger' && formData.phone.length < 9) {
             throw new Error("Số điện thoại không hợp lệ!");
         }
 
-        // Gọi API
         await mockService.register({
-            username: formData.email, // Dùng email làm định danh chính (hoặc có thể bỏ nếu backend tự sinh)
+            username: formData.email, 
             fullName: formData.fullName,
             email: formData.email,
             phone: formData.phone,
@@ -67,8 +79,18 @@ const AuthForm = ({ role, type }) => {
             role: role
         });
         
-        alert("Đăng ký thành công! Vui lòng đăng nhập.");
-        navigate('/passenger/login');
+        Swal.fire({
+          title: 'Đăng ký thành công!',
+          text: 'Chào mừng bạn đến với GTTM. Vui lòng đăng nhập để tiếp tục.',
+          icon: 'success',
+          confirmButtonText: 'Đồng ý',
+          confirmButtonColor: '#2563EB',
+          allowOutsideClick: false,
+        }).then((result) => {
+          if (result.isConfirmed) {
+            navigate('/passenger/login'); 
+          }
+        });
       }
     } catch (err) {
       setError(err.message || "Có lỗi xảy ra");
@@ -103,6 +125,7 @@ const AuthForm = ({ role, type }) => {
                 className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
                 placeholder="Nguyễn Văn A" 
                 onChange={handleChange}
+                value={formData.fullName}
               />
             </div>
             
@@ -116,6 +139,8 @@ const AuthForm = ({ role, type }) => {
                         className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
                         placeholder="email@vidu.com" 
                         onChange={handleChange}
+                        value={formData.email}
+                        autoComplete="email"
                     />
                 </div>
                 <div>
@@ -127,6 +152,8 @@ const AuthForm = ({ role, type }) => {
                         className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
                         placeholder="090..." 
                         onChange={handleChange}
+                        value={formData.phone}
+                        autoComplete="tel"
                     />
                 </div>
             </div>
@@ -148,7 +175,6 @@ const AuthForm = ({ role, type }) => {
       )}
       
       {/* --- TRƯỜNG TÊN ĐĂNG NHẬP / EMAIL (CHUNG) --- */}
-      {/* Nếu là Đăng Ký Passenger thì trường này ẩn đi vì đã có Email/Phone ở trên */}
       {(isLogin || role !== 'passenger') && (
         <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -161,6 +187,8 @@ const AuthForm = ({ role, type }) => {
             className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
             placeholder={role === 'passenger' ? "VD: 0905... hoặc abc@gmail.com" : "Ví dụ: admin"} 
             onChange={handleChange}
+            value={formData.username}
+            autoComplete="username" // Hỗ trợ browser điền đúng
             />
         </div>
       )}
@@ -176,6 +204,9 @@ const AuthForm = ({ role, type }) => {
                 className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
                 placeholder="••••••" 
                 onChange={handleChange}
+                value={formData.password}
+                // Nếu là đăng ký -> new-password (để không gợi ý pass cũ), đăng nhập -> current-password
+                autoComplete={!isLogin ? "new-password" : "current-password"}
             />
           </div>
           
@@ -190,6 +221,8 @@ const AuthForm = ({ role, type }) => {
                     className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
                     placeholder="••••••" 
                     onChange={handleChange}
+                    value={formData.confirmPassword}
+                    autoComplete="new-password"
                 />
              </div>
           )}
