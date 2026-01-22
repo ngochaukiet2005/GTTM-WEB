@@ -1,4 +1,3 @@
-//
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -9,8 +8,8 @@ import L from 'leaflet';
 // Icon User: Chấm tròn xanh
 const userDotIcon = L.divIcon({
     className: 'gps-user-marker', 
-    iconSize: [20, 20],           // Tăng kích thước nhẹ để dễ nhìn
-    iconAnchor: [10, 10],         // Tâm chấm nằm chính giữa
+    iconSize: [20, 20],           
+    iconAnchor: [10, 10],         
     popupAnchor: [0, -10]         
 });
 
@@ -39,26 +38,24 @@ const MapController = ({ center, userPos, isTracking, onDragStart }) => {
             onDragStart && onDragStart();
         },
         click: (e) => {
-           // Có thể thêm logic click map tại đây nếu cần
+           // Logic click map nếu cần
         }
     });
 
     useEffect(() => {
-        // Ưu tiên 1: Bay đến điểm chọn (nếu có và không phải là vị trí user hiện tại)
-        if (center && !isTracking) {
+        // Ưu tiên 1: Bay đến điểm chọn (CHỈ KHI CÓ LAT/LNG HỢP LỆ)
+        // Đây là chỗ fix lỗi crash: Kiểm tra kỹ lat, lng trước khi flyTo
+        if (center && typeof center.lat === 'number' && typeof center.lng === 'number' && !isTracking) {
              map.flyTo([center.lat, center.lng], 16, { animate: true, duration: 1.0 });
              return;
         }
 
         // Ưu tiên 2: Bám theo User (Tracking Mode)
-        if (isTracking && userPos) {
-            // Lọc nhiễu: Chỉ di chuyển map nếu khoảng cách thay đổi đáng kể (> 2 mét)
-            // hoặc nếu chưa có vị trí cũ.
+        if (isTracking && userPos && typeof userPos.lat === 'number') {
             const shouldMove = !prevPosRef.current || 
                 map.distance([userPos.lat, userPos.lng], prevPosRef.current) > 2;
 
             if (shouldMove) {
-                // panTo mượt hơn flyTo cho khoảng cách gần
                 map.panTo([userPos.lat, userPos.lng], { animate: true, duration: 0.5 });
                 prevPosRef.current = [userPos.lat, userPos.lng];
             }
@@ -79,8 +76,8 @@ const AppMap = ({
     const [isTracking, setIsTracking] = useState(true); 
     const watchIdRef = useRef(null);
     
-    // Mặc định hiển thị Bến xe
-    const defaultCenter = [stationLocation.lat, stationLocation.lng]; 
+    // Mặc định hiển thị Bến xe Miền Tây nếu chưa có vị trí
+    const defaultCenter = [10.742336, 106.613876]; 
 
     // --- LOGIC GPS TỐI ƯU ---
     useEffect(() => {
@@ -89,16 +86,14 @@ const AppMap = ({
             return;
         }
 
-        // Options tối ưu cho realtime tracking
         const geoOptions = { 
-            enableHighAccuracy: true, // Quan trọng: Bắt buộc dùng chip GPS
-            timeout: 10000,           // Thời gian chờ tối đa
-            maximumAge: 0             // Không dùng cache vị trí cũ
+            enableHighAccuracy: true, // Bắt buộc dùng chip GPS để chính xác nhất
+            timeout: 10000,           
+            maximumAge: 0             
         };
 
         const success = (position) => {
             const { latitude, longitude, accuracy, heading } = position.coords;
-            // Cập nhật vị trí
             setCurrentPos({ lat: latitude, lng: longitude, accuracy, heading });
         };
 
@@ -106,7 +101,6 @@ const AppMap = ({
             console.warn("Lỗi GPS:", err.message);
         };
 
-        // Bắt đầu theo dõi
         watchIdRef.current = navigator.geolocation.watchPosition(success, error, geoOptions);
 
         return () => {
@@ -128,14 +122,14 @@ const AppMap = ({
                 if (onLocationSelect) {
                     onLocationSelect({ lat: e.latlng.lat, lng: e.latlng.lng });
                 }
-                setIsTracking(false); // Dừng bám theo user khi click chọn điểm
+                setIsTracking(false); 
             },
         });
         return null;
     };
 
-    // Tính toán tâm khởi tạo (chỉ dùng cho lần render đầu tiên của MapContainer)
-    const initialCenter = (currentPos) ? [currentPos.lat, currentPos.lng] : defaultCenter;
+    // Tính toán tâm khởi tạo an toàn
+    const initialCenter = (currentPos && currentPos.lat) ? [currentPos.lat, currentPos.lng] : defaultCenter;
 
     return (
         <div className="w-full h-full z-0 bg-gray-100 relative">
@@ -156,24 +150,24 @@ const AppMap = ({
                     center={selectedLocation} 
                     userPos={currentPos} 
                     isTracking={isTracking}
-                    onDragStart={() => setIsTracking(false)} // Người dùng kéo map -> Tắt tracking
+                    onDragStart={() => setIsTracking(false)} 
                 />
 
-                {/* 1. BẾN XE */}
-                <Marker position={[stationLocation.lat, stationLocation.lng]} icon={stationIcon}>
-                    <Popup><b>🏁 {stationLocation.address}</b></Popup>
-                </Marker>
+                {/* 1. ĐIỂM CỐ ĐỊNH (Ví dụ: Bến xe hoặc Điểm đón của Tài xế) */}
+                {stationLocation && stationLocation.lat && (
+                    <Marker position={[stationLocation.lat, stationLocation.lng]} icon={stationIcon}>
+                        <Popup><b>🏁 {stationLocation.address || "Điểm mốc"}</b></Popup>
+                    </Marker>
+                )}
 
                 {/* 2. VỊ TRÍ USER (Realtime) */}
                 {currentPos && (
                     <>
-                        {/* Vòng tròn sai số */}
                         <Circle 
                             center={[currentPos.lat, currentPos.lng]}
-                            radius={currentPos.accuracy} 
+                            radius={currentPos.accuracy || 20} 
                             pathOptions={{ color: '#4285F4', fillColor: '#4285F4', fillOpacity: 0.1, weight: 1, opacity: 0.3 }}
                         />
-                        {/* Chấm xanh vị trí */}
                         <Marker 
                             position={[currentPos.lat, currentPos.lng]} 
                             icon={userDotIcon} 
@@ -184,7 +178,7 @@ const AppMap = ({
                     </>
                 )}
 
-                {/* 3. ĐIỂM ĐÃ CHỌN */}
+                {/* 3. ĐIỂM ĐÃ CHỌN (Điểm đến của Khách hoặc Điểm trả của Tài xế) */}
                 {selectedLocation && selectedLocation.lat && (
                     <Marker position={[selectedLocation.lat, selectedLocation.lng]} icon={selectedIcon}>
                         <Popup>{selectedLocation.address}</Popup>
@@ -192,7 +186,7 @@ const AppMap = ({
                 )}
             </MapContainer>
 
-            {/* Nút "Bám theo tôi" - Chỉ hiện khi đang KHÔNG tracking */}
+            {/* Nút "Bám theo tôi" */}
             {!isTracking && (
                 <button
                     onClick={(e) => {

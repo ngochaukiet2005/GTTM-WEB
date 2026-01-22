@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 // 👇 Import service giả
-import { mockService } from '../../services/mockApi'; 
+import { mockService } from '../../core/services/mockApi'; 
 
 const AuthForm = ({ role, type }) => {
   const isLogin = type === 'login';
@@ -40,7 +40,7 @@ const AuthForm = ({ role, type }) => {
         // Chuyển hướng
         if (role === 'admin') navigate('/admin/dashboard');
         if (role === 'driver') navigate('/driver/trips');
-        if (role === 'passenger') navigate('/passenger/home');
+        if (role === 'passenger') navigate('/passenger/dashboard');
       } else {
         // 2. Xử lý Đăng Ký (Chỉ cho Passenger)
         await mockService.register(formData);
