@@ -136,7 +136,7 @@ export const mockService = {
           avatar: user.avatar,
           phone: user.phone,
           email: user.email,
-          gender: user.gender // Trả thêm giới tính để form profile dùng
+          gender: user.gender
         } 
       };
     });
@@ -166,26 +166,42 @@ export const mockService = {
     });
   },
 
-  // 👇 HÀM CẬP NHẬT PROFILE MỚI
+  // 👇 --- CÁC HÀM OTP MỚI ---
+  sendOtpEmail: async (email) => {
+    return simulateNetwork(() => {
+      console.log(`[MOCK EMAIL] Đang gửi OTP đến: ${email}`);
+      // Giả lập luôn thành công
+      return { success: true, message: `Đã gửi mã xác thực đến ${email}` };
+    });
+  },
+
+  verifyOtp: async (email, otpCode) => {
+    return simulateNetwork(() => {
+      console.log(`[MOCK OTP] Kiểm tra mã ${otpCode} cho email ${email}`);
+      // Mã mặc định để test là 123456
+      if (otpCode === '123456') {
+        return { success: true };
+      }
+      throw new Error("Mã xác thực không chính xác!");
+    });
+  },
+  // -------------------------
+
   updateProfile: async (userId, updateData) => {
     return simulateNetwork(() => {
         const userIndex = MOCK_DB.users.findIndex(u => u.id === userId);
         if (userIndex === -1) throw new Error("User không tồn tại!");
 
-        // Chỉ cho phép cập nhật các trường an toàn
         const currentUser = MOCK_DB.users[userIndex];
         const updatedUser = {
             ...currentUser,
             fullName: updateData.fullName || currentUser.fullName,
             gender: updateData.gender || currentUser.gender,
             avatar: updateData.avatar || currentUser.avatar,
-            // Không cho phép update email, phone, username tại đây (Logic bảo mật)
         };
 
-        // Lưu lại DB giả
         MOCK_DB.users[userIndex] = updatedUser;
         
-        // Trả về object user mới chuẩn format login để lưu localstorage
         return {
             id: updatedUser.id, 
             name: updatedUser.fullName, 
@@ -220,8 +236,6 @@ export const mockService = {
       }
     });
   },
-
-  // --- TRIP (CHUYẾN XE) ---
 
   createTrip: async (tripData) => {
     return simulateNetwork(() => {
