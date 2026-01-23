@@ -1,11 +1,12 @@
 // src/features/auth/AuthForm.jsx
 
-import React, { useState, useEffect } from 'react'; // ✅ Thêm useEffect
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2'; 
 import { mockService } from '../../core/services/mockApi'; 
 
-const AuthForm = ({ role, type }) => {
+// ✅ THÊM onSubmit vào danh sách props nhận về
+const AuthForm = ({ role, type, onSubmit }) => {
   const isLogin = type === 'login';
   const navigate = useNavigate();
   
@@ -24,7 +25,7 @@ const AuthForm = ({ role, type }) => {
     confirmPassword: ''  
   });
 
-  // ✅ FIX: Reset form khi chuyển đổi giữa Login và Register (type thay đổi)
+  // Reset form khi chuyển đổi giữa Login và Register
   useEffect(() => {
     setFormData({
         username: '',        
@@ -49,6 +50,25 @@ const AuthForm = ({ role, type }) => {
     setError('');
 
     try {
+        // --- VALIDATION CƠ BẢN TRƯỚC ---
+        if (!isLogin && role === 'passenger') {
+            if (formData.password !== formData.confirmPassword) {
+                throw new Error("Mật khẩu xác nhận không khớp!");
+            }
+            if (formData.phone.length < 9) {
+                throw new Error("Số điện thoại không hợp lệ!");
+            }
+        }
+
+        // ✅ QUAN TRỌNG: Kiểm tra nếu có hàm onSubmit từ bên ngoài (logic OTP) thì chạy nó
+        if (onSubmit) {
+            // Gọi hàm xử lý OTP bên PassengerAuth và dừng logic mặc định tại đây
+            await onSubmit(formData);
+            setLoading(false); 
+            return; 
+        }
+
+      // --- LOGIC MẶC ĐỊNH (NẾU KHÔNG CÓ OTP) ---
       if (isLogin) {
         // --- 1. XỬ LÝ ĐĂNG NHẬP ---
         const response = await mockService.login(formData.username, formData.password, role);
@@ -60,15 +80,7 @@ const AuthForm = ({ role, type }) => {
         if (role === 'driver') navigate('/driver/trips');
         if (role === 'passenger') navigate('/passenger/dashboard');
       } else {
-        // --- 2. XỬ LÝ ĐĂNG KÝ (CHỈ PASSENGER) ---
-        
-        if (formData.password !== formData.confirmPassword) {
-            throw new Error("Mật khẩu xác nhận không khớp!");
-        }
-        if (role === 'passenger' && formData.phone.length < 9) {
-            throw new Error("Số điện thoại không hợp lệ!");
-        }
-
+        // --- 2. XỬ LÝ ĐĂNG KÝ MẶC ĐỊNH (CHO DRIVER HOẶC ADMIN NẾU CẦN) ---
         await mockService.register({
             username: formData.email, 
             fullName: formData.fullName,
@@ -94,6 +106,7 @@ const AuthForm = ({ role, type }) => {
       }
     } catch (err) {
       setError(err.message || "Có lỗi xảy ra");
+      Swal.fire('Lỗi', err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -188,7 +201,7 @@ const AuthForm = ({ role, type }) => {
             placeholder={role === 'passenger' ? "VD: 0905... hoặc abc@gmail.com" : "Ví dụ: admin"} 
             onChange={handleChange}
             value={formData.username}
-            autoComplete="username" // Hỗ trợ browser điền đúng
+            autoComplete="username" 
             />
         </div>
       )}
@@ -205,7 +218,6 @@ const AuthForm = ({ role, type }) => {
                 placeholder="••••••" 
                 onChange={handleChange}
                 value={formData.password}
-                // Nếu là đăng ký -> new-password (để không gợi ý pass cũ), đăng nhập -> current-password
                 autoComplete={!isLogin ? "new-password" : "current-password"}
             />
           </div>
