@@ -1,8 +1,9 @@
 // src/features/passenger/PassengerDashboard.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { mockService } from '../../core/services/mockApi';
+import Swal from 'sweetalert2';
 
 const PassengerDashboard = () => {
   const navigate = useNavigate();
@@ -11,81 +12,133 @@ const PassengerDashboard = () => {
   const [user, setUser] = useState({ name: 'Khách', avatar: '' });
   const [greeting, setGreeting] = useState('Chào bạn');
   const [lastTrip, setLastTrip] = useState(null);
-  
-  // 👇 STATE MỚI: Chuyến đi đang hoạt động (Pending/Running)
   const [activeTrip, setActiveTrip] = useState(null);
 
+  // State quản lý Dropdown Menu
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
   useEffect(() => {
-    // 1. Xử lý lời chào theo giờ
+    // 1. Kiểm tra đăng nhập từ LocalStorage
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (currentUser) {
+        setUser(currentUser);
+    }
+
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) setGreeting('Chào buổi sáng');
     else if (hour >= 12 && hour < 18) setGreeting('Chào buổi chiều');
     else setGreeting('Chào buổi tối');
 
-    // 2. Lấy thông tin User & Lịch sử cũ
     const fetchData = async () => {
-        // Giả lập login để lấy tên thật
-        try {
-            const loginData = await mockService.login('khach', '123', 'passenger');
-            setUser(loginData.user);
-        } catch (e) {
-            // Fallback nếu lỗi
-            setUser({ 
-                name: 'Bạn mình', 
-                avatar: 'https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff&size=128' 
-            });
-        }
-
-        // Lấy chuyến đi gần nhất (cho widget cuối trang)
+        // Chỉ gọi API lịch sử nếu đã có user
         mockService.getTripHistory('u1').then(data => {
-            // Lọc ra chuyến đã hoàn thành hoặc hủy để hiện ở mục "Gần đây"
             const history = data.filter(t => ['completed', 'cancelled'].includes(t.status));
-            if(history && history.length > 0) setLastTrip(history[0]);
+            if(history.length > 0) setLastTrip(history[0]);
         });
     };
     fetchData();
 
-    // 3. Polling: Lấy chuyến đi ĐANG HOẠT ĐỘNG (Pending/Running)
     const fetchActiveTrip = async () => {
         const trip = await mockService.getCurrentTrip('u1');
         setActiveTrip(trip);
     };
     fetchActiveTrip();
-    const interval = setInterval(fetchActiveTrip, 3000); // Cập nhật mỗi 3s
+    const interval = setInterval(fetchActiveTrip, 3000); 
     
-    return () => clearInterval(interval);
-  }, []);
+    // Sự kiện click outside để đóng menu
+    const handleClickOutside = (event) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            setShowDropdown(false);
+        }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
 
-  // Hàm đặt lại chuyến cũ
+    return () => {
+        clearInterval(interval);
+        document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [navigate]);
+
   const handleRebook = (trip) => {
     if (!trip) return;
     navigate('/passenger/booking', { 
       state: { 
         pickup: trip.from, 
-        destination: trip.to,
-        rebookPrice: trip.price 
+        destination: trip.to
+        // Đã bỏ truyền rebookPrice
       } 
     });
   };
 
-  // 👇 HÀM MỚI: Chuyển hướng khi bấm vào đơn đang chạy
   const goToActiveTrip = () => {
     navigate('/passenger/history');
   };
 
+  // HÀM XỬ LÝ ĐĂNG XUẤT
+  const handleLogout = () => {
+    setShowDropdown(false);
+    Swal.fire({
+        title: 'Đăng xuất?',
+        text: "Bạn có chắc muốn thoát tài khoản?",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Đăng xuất',
+        cancelButtonText: 'Ở lại',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        heightAuto: false
+    }).then((result) => {
+        if (result.isConfirmed) {
+            localStorage.removeItem('currentUser'); // Xóa session
+            navigate('/'); // Về trang chủ
+        }
+    });
+  };
+
   return (
-    <div className="max-w-md mx-auto md:max-w-4xl pb-24 md:pb-0 font-sans">
+    <div className="max-w-md mx-auto md:max-w-4xl pb-24 md:pb-0 font-sans px-4 min-h-screen">
       
       {/* --- HEADER --- */}
-      <div className="flex items-center justify-between mb-8 pt-2">
+      <div className="flex items-center justify-between mb-8 pt-4 md:pt-6 relative z-50">
          <div>
             <p className="text-gray-500 text-sm font-medium mb-1">{greeting},</p>
-            {/* Hiển thị tên thật từ User */}
             <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">{user.name} 👋</h1>
          </div>
-         <Link to="/passenger/profile" className="w-12 h-12 rounded-full border-2 border-white shadow-lg overflow-hidden hover:scale-105 transition-transform">
-             <img src={user.avatar || "https://ui-avatars.com/api/?background=random"} alt="Avatar" className="w-full h-full object-cover" />
-         </Link>
+         
+         {/* AVATAR + DROPDOWN */}
+         <div className="relative" ref={dropdownRef}>
+             <button 
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="w-12 h-12 rounded-full border-2 border-white shadow-lg overflow-hidden transition-transform active:scale-95 focus:outline-none"
+             >
+                 <img src={user.avatar || "https://ui-avatars.com/api/?background=random"} alt="Avatar" className="w-full h-full object-cover" />
+             </button>
+
+             {/* MENU DROPDOWN */}
+             {showDropdown && (
+                 <div className="absolute right-0 top-14 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 animate-fade-in-down origin-top-right overflow-hidden">
+                     <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50">
+                         <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">Tài khoản</p>
+                         <p className="text-sm font-bold text-gray-800 truncate">{user.name}</p>
+                     </div>
+                     
+                     <Link 
+                        to="/passenger/profile" 
+                        className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                     >
+                         <span className="text-lg">👤</span> Chỉnh sửa thông tin
+                     </Link>
+                     
+                     <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left"
+                     >
+                         <span className="text-lg">🚪</span> Đăng xuất
+                     </button>
+                 </div>
+             )}
+         </div>
       </div>
 
       <div className="mb-6">
@@ -119,7 +172,6 @@ const PassengerDashboard = () => {
         </Link>
       </div>
 
-      {/* 👇 TÍNH NĂNG MỚI: THẺ ĐƠN HÀNG ĐANG CHẠY (CHỈ HIỆN KHI CÓ) */}
       {activeTrip && (
         <div className="mb-8 animate-fade-in-down">
             <div className="flex justify-between items-end mb-2 px-1">
@@ -131,14 +183,13 @@ const PassengerDashboard = () => {
                 onClick={goToActiveTrip}
                 className="bg-white p-5 rounded-[24px] border border-blue-100 shadow-lg shadow-blue-50 cursor-pointer active:scale-95 transition-all relative overflow-hidden group hover:border-blue-300"
             >
-                {/* Thanh trạng thái dọc */}
                 <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500 group-hover:w-2 transition-all"></div>
 
                 <div className="flex justify-between items-start mb-3 pl-3">
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-blue-50 text-blue-600`}>
                         {activeTrip.status === 'pending' ? 'Đang tìm tài xế...' : 'Tài xế đang đến'}
                     </span>
-                    <span className="font-bold text-blue-600 text-lg">{activeTrip.price}</span>
+                    {/* ĐÃ BỎ GIÁ */}
                 </div>
 
                 <div className="flex items-center gap-4 pl-3">
@@ -163,7 +214,7 @@ const PassengerDashboard = () => {
         </div>
       )}
 
-      {/* GRID MENU (Lịch sử & Profile) */}
+      {/* GRID MENU */}
       <div className="grid grid-cols-2 gap-4 mb-8">
         <Link to="/passenger/history" className="bg-white p-5 rounded-[24px] shadow-sm border border-gray-100 hover:shadow-lg hover:border-purple-100 transition-all active:scale-95 flex flex-col justify-between h-40 group">
             <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-purple-100 transition-colors">📜</div>
@@ -175,7 +226,7 @@ const PassengerDashboard = () => {
         </Link>
       </div>
 
-      {/* WIDGET HOẠT ĐỘNG GẦN ĐÂY NHẤT (Đã hoàn thành/Hủy) */}
+      {/* WIDGET HOẠT ĐỘNG GẦN ĐÂY */}
       <div className="bg-gray-50/50 rounded-[24px] p-6 border border-gray-100">
         <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-800 text-lg">Gần đây nhất</h3>
@@ -205,10 +256,7 @@ const PassengerDashboard = () => {
                         {lastTrip.distance}
                     </p>
                 </div>
-
-                <span className="font-extrabold text-gray-800 text-sm bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
-                    {lastTrip.price}
-                </span>
+                {/* ĐÃ BỎ GIÁ */}
             </div>
         ) : (
              <div className="text-center py-8">

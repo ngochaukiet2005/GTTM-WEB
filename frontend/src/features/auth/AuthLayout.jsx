@@ -16,7 +16,7 @@ const AuthLayout = ({ children, title, subtitle, bgColor = "bg-blue-600", imageM
 
         {/* Cột phải: Banner (Ẩn trên mobile) */}
         <div className={`hidden md:flex md:w-1/2 ${bgColor} text-white flex-col justify-center items-center p-8 transition-colors duration-500`}>
-          <h1 className="text-4xl font-bold mb-4">GTTM Auto Shuttle</h1>
+          <h1 className="text-4xl lg:text-5xl font-extrabold mb-6 tracking-tight leading-tight">HỆ THỐNG ĐẶT XE TRUNG CHUYỂN</h1>
           <p className="text-lg text-center opacity-90">
             {imageMsg || "Hệ thống xe trung chuyển thông minh, kết nối mọi nẻo đường."}
           </p>

@@ -11,6 +11,7 @@ import AdminAuth from './features/admin/AdminAuth';
 import PassengerLayout from './features/passenger/PassengerLayout';
 import PassengerDashboard from './features/passenger/PassengerDashboard';
 import PassengerBooking from './features/passenger/PassengerBooking'; 
+import PassengerProfile from './features/passenger/PassengerProfile';
 import TripHistory from './features/passenger/TripHistory';
 import DriverHome from './features/driver/DriverHome';
 
@@ -35,7 +36,7 @@ function App() {
             <Route path="dashboard" element={<PassengerDashboard />} />
             <Route path="booking" element={<PassengerBooking />} /> 
             <Route path="history" element={<TripHistory />} />
-            <Route path="profile" element={<div className="p-8 text-center">Trang cá nhân (Đang phát triển)</div>} />
+            <Route path="profile" element={<PassengerProfile />} />
         </Route>
 
         {/* DRIVER */}

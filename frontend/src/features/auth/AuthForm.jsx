@@ -81,7 +81,7 @@ const AuthForm = ({ role, type }) => {
         
         Swal.fire({
           title: 'Đăng ký thành công!',
-          text: 'Chào mừng bạn đến với GTTM. Vui lòng đăng nhập để tiếp tục.',
+          text: 'Chào mừng bạn đến với Hệ thống đặt xe trung chuyển. Vui lòng đăng nhập để tiếp tục.',
           icon: 'success',
           confirmButtonText: 'Đồng ý',
           confirmButtonColor: '#2563EB',

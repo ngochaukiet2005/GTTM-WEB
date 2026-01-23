@@ -3,28 +3,24 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mockService } from '../../core/services/mockApi';
+import Swal from 'sweetalert2';
 
 const TripHistory = () => {
   const navigate = useNavigate();
   const [trips, setTrips] = useState([]);
-  const [activeTab, setActiveTab] = useState('active'); // 'active' | 'history'
-  
-  // State: Đánh giá (Input)
+  const [activeTab, setActiveTab] = useState('active'); 
   const [ratingModal, setRatingModal] = useState({ show: false, trip: null });
   const [star, setStar] = useState(5);
   const [comment, setComment] = useState('');
 
-  // State: Modal Thông báo thành công
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  // State: Modal Xác nhận Hủy chuyến
+  // State xác nhận hủy
   const [cancelModal, setCancelModal] = useState({ show: false, tripId: null });
 
-  // Polling
+  // State thông báo thành công
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
   useEffect(() => {
-    const fetchTrips = () => {
-      mockService.getTripHistory('u1').then(setTrips);
-    };
+    const fetchTrips = () => mockService.getTripHistory('u1').then(setTrips);
     fetchTrips();
     const intervalId = setInterval(fetchTrips, 2000);
     return () => clearInterval(intervalId);
@@ -33,26 +29,21 @@ const TripHistory = () => {
   const activeTrips = trips.filter(t => ['pending', 'accepted', 'arriving', 'running'].includes(t.status));
   const pastTrips = trips.filter(t => ['completed', 'cancelled'].includes(t.status));
 
-  // --- LOGIC XỬ LÝ ---
-
   const handleRebook = (trip) => {
-    navigate('/passenger/booking', { state: { pickup: trip.from, destination: trip.to, rebookPrice: trip.price } });
+    navigate('/passenger/booking', { state: { pickup: trip.from, destination: trip.to } });
   };
 
-  // Mở modal xác nhận hủy
   const onRequestCancel = (tripId) => {
     setCancelModal({ show: true, tripId });
   };
 
-  // Xác nhận hủy thật
   const handleConfirmCancel = async () => {
     if (!cancelModal.tripId) return;
     try {
         await mockService.cancelTrip(cancelModal.tripId);
         setCancelModal({ show: false, tripId: null });
-        mockService.getTripHistory('u1').then(setTrips); // Refresh ngay
+        mockService.getTripHistory('u1').then(setTrips);
     } catch (error) {
-        alert(error.message); // Thông báo lỗi từ mockApi nếu cố tình hủy sai luật
         setCancelModal({ show: false, tripId: null });
     }
   };
@@ -101,13 +92,13 @@ const TripHistory = () => {
         {(activeTab === 'active' ? activeTrips : pastTrips).map(trip => (
           <div key={trip.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all relative">
             
-            {/* Header */}
+            {/* Header: Đã xóa giá */}
             <div className="flex justify-between items-start mb-4">
                <div>
                   {getStatusBadge(trip.status)}
                   <p className="text-xs text-gray-400 mt-2 font-medium">{new Date(trip.date).toLocaleString('vi-VN')}</p>
                </div>
-               <p className="text-lg font-extrabold text-blue-600">{trip.price}</p>
+               {/* Đã xóa <p> giá tiền ở đây */}
             </div>
 
             {/* Route */}
@@ -145,7 +136,7 @@ const TripHistory = () => {
                         </div>
                     </div>
 
-                    {/* LOGIC HỦY: CHỈ HIỆN KHI PENDING */}
+                    {/* LOGIC HỦY */}
                     {trip.status === 'pending' ? (
                         <button 
                             onClick={() => onRequestCancel(trip.id)}
@@ -166,13 +157,11 @@ const TripHistory = () => {
                   {/* LOGIC ĐÁNH GIÁ */}
                   {trip.status === 'completed' && (
                       trip.rating && trip.rating > 0 ? (
-                        // Đã đánh giá -> Hiện số sao (Không click được)
                         <div className="flex items-center gap-1.5 bg-yellow-50 px-3 py-2 rounded-xl border border-yellow-100 cursor-default select-none">
                              <span className="text-yellow-500 text-sm">⭐</span>
                              <span className="text-sm font-bold text-yellow-700">{trip.rating} Sao</span>
                         </div>
                       ) : (
-                        // Chưa đánh giá -> Nút màu vàng nổi bật
                         <button 
                             type="button"
                             onClick={(e) => {

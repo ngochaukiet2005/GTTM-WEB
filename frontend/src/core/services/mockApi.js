@@ -4,16 +4,31 @@
 // 1. DATABASE GIẢ (Lưu trữ trong bộ nhớ tạm - RAM)
 // ----------------------------------------------------------------------
 
+const VALID_TICKETS = [
+  {
+    tripCode: "VX001",
+    fullName: "Nguyen Van Khach",
+    email: "khach@gmail.com", 
+    phone: "0905123456"
+  },
+  {
+    tripCode: "VX002",
+    fullName: "Tran Thi B",
+    email: "test@gmail.com",
+    phone: "0909123457"
+  }
+];
+
 const MOCK_DB = {
   users: [
     {
       id: "u1",
-      username: "khach", // Giữ lại để tương thích ngược nếu cần
-      email: "khach@gmail.com",       // MỚI
-      phone: "0905123456",            // MỚI
+      username: "khach",
+      email: "khach@gmail.com",       
+      phone: "0905123456",            
       password: "123",
       fullName: "Nguyễn Văn Khách",
-      gender: "male",                 // MỚI
+      gender: "male",                 
       role: "passenger",
       avatar: "https://ui-avatars.com/api/?name=Nguyen+Van+Khach&background=random"
     },
@@ -36,7 +51,6 @@ const MOCK_DB = {
     }
   ],
 
-  // Dữ liệu mẫu cho lịch sử chuyến đi (GIỮ NGUYÊN)
   trips: [
     {
       id: "trip_01",
@@ -103,7 +117,6 @@ export const mockService = {
   
   // --- AUTHENTICATION ---
   
-  // SỬA: Login chấp nhận identifier là username, email hoặc phone
   login: async (identifier, password, role) => {
     return simulateNetwork(() => {
       const user = MOCK_DB.users.find(u => 
@@ -121,17 +134,16 @@ export const mockService = {
           name: user.fullName, 
           role: user.role, 
           avatar: user.avatar,
-          phone: user.phone, // Trả thêm phone
-          email: user.email  // Trả thêm email
+          phone: user.phone,
+          email: user.email,
+          gender: user.gender // Trả thêm giới tính để form profile dùng
         } 
       };
     });
   },
 
-  // SỬA: Register kiểm tra trùng email/phone và lưu đầy đủ thông tin
   register: async (userData) => {
     return simulateNetwork(() => {
-      // Kiểm tra trùng lặp
       const existingUser = MOCK_DB.users.find(u => 
         (userData.username && u.username === userData.username) ||
         (userData.email && u.email === userData.email) ||
@@ -154,7 +166,62 @@ export const mockService = {
     });
   },
 
-  // --- TRIP (CHUYẾN XE) - GIỮ NGUYÊN ---
+  // 👇 HÀM CẬP NHẬT PROFILE MỚI
+  updateProfile: async (userId, updateData) => {
+    return simulateNetwork(() => {
+        const userIndex = MOCK_DB.users.findIndex(u => u.id === userId);
+        if (userIndex === -1) throw new Error("User không tồn tại!");
+
+        // Chỉ cho phép cập nhật các trường an toàn
+        const currentUser = MOCK_DB.users[userIndex];
+        const updatedUser = {
+            ...currentUser,
+            fullName: updateData.fullName || currentUser.fullName,
+            gender: updateData.gender || currentUser.gender,
+            avatar: updateData.avatar || currentUser.avatar,
+            // Không cho phép update email, phone, username tại đây (Logic bảo mật)
+        };
+
+        // Lưu lại DB giả
+        MOCK_DB.users[userIndex] = updatedUser;
+        
+        // Trả về object user mới chuẩn format login để lưu localstorage
+        return {
+            id: updatedUser.id, 
+            name: updatedUser.fullName, 
+            role: updatedUser.role, 
+            avatar: updatedUser.avatar,
+            phone: updatedUser.phone,
+            email: updatedUser.email,
+            gender: updatedUser.gender
+        };
+    });
+  },
+
+  verifyTicket: (data) => {
+    return simulateNetwork(() => {
+      if (!data.tripCode || !data.fullName || !data.email || !data.phone || !data.tripDate || !data.departTime || !data.pickup || !data.destination) {
+        throw new Error("Vui lòng điền đầy đủ thông tin vé!");
+      }
+
+      const isValid = VALID_TICKETS.find(t => 
+        t.tripCode === data.tripCode && 
+        t.email === data.email
+      );
+
+      if (isValid) {
+        return { 
+          success: true, 
+          message: "Xác thực thành công!", 
+          ticketInfo: { ...isValid, ...data }
+        };
+      } else {
+        throw new Error("Không tìm thấy thông tin vé hợp lệ (Thử: VX001 / khach@gmail.com)!");
+      }
+    });
+  },
+
+  // --- TRIP (CHUYẾN XE) ---
 
   createTrip: async (tripData) => {
     return simulateNetwork(() => {
@@ -166,10 +233,9 @@ export const mockService = {
         driver: null, 
         rating: 0,
         comment: "",
-        ...tripData
+        ...tripData 
       };
       MOCK_DB.trips.unshift(newTrip);
-      console.log("📍 [MOCK DB] Chuyến mới đã tạo:", newTrip);
       return newTrip;
     });
   },
@@ -220,7 +286,6 @@ export const mockService = {
         }
 
         trip.status = 'cancelled';
-        console.log(`❌ Chuyến ${tripId} đã bị hủy bởi khách hàng.`);
         return { success: true };
     });
   },

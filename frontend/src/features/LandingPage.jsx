@@ -3,92 +3,58 @@ import { Link } from 'react-router-dom';
 
 const LandingPage = () => {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gray-50 flex flex-col justify-center p-6 md:items-center">
       
       {/* Header */}
-      <div className="text-center mb-12 animate-fade-in-down">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-          GTTM <span className="text-blue-600">Auto Shuttle</span>
+      <div className="text-center mb-10 animate-fade-in-down">
+        <div className="w-20 h-20 bg-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-xl shadow-blue-200 rotate-3">
+             <span className="text-4xl">🚌</span>
+        </div>
+        <h1 className="text-3xl md:text-5xl font-extrabold text-gray-900 mb-3 tracking-tight">
+          HỆ THỐNG ĐẶT XE <span className="text-blue-600">TRUNG CHUYỂN</span>
         </h1>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Hệ thống xe trung chuyển thông minh. Vui lòng chọn vai trò của bạn để tiếp tục.
+        <p className="text-gray-500 text-sm md:text-lg max-w-md mx-auto">
+          Hệ thống đặt xe trung chuyển thông minh miễn phí.
         </p>
       </div>
 
-      {/* Grid lựa chọn */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full">
+      {/* Mobile Stack Layout: Các nút xếp dọc trên mobile, ngang trên tablet */}
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-4 w-full max-w-4xl">
         
-        {/* 1. KHÁCH HÀNG (Passenger) */}
-        <Link 
-          to="/passenger/login"
-          className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-t-4 border-blue-500"
-        >
-          <div className="absolute top-4 right-4 text-6xl opacity-10 group-hover:opacity-20 transition-opacity">
-            🙋‍♂️
+        {/* 1. KHÁCH HÀNG */}
+        <Link to="/passenger/login" className="group flex items-center p-4 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-blue-500 hover:shadow-md transition-all active:scale-[0.98]">
+          <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-2xl mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">🙋‍♂️</div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-gray-800">Hành Khách</h2>
+            <p className="text-xs text-gray-400">Đặt xe, xem lịch trình</p>
           </div>
-          <div className="text-4xl mb-4 bg-blue-100 w-16 h-16 flex items-center justify-center rounded-full text-blue-600">
-            🙋‍♂️
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors">
-            Hành Khách
-          </h2>
-          <p className="text-gray-500">
-            Đặt xe trung chuyển, theo dõi lộ trình và di chuyển dễ dàng.
-          </p>
-          <div className="mt-6 flex items-center text-blue-600 font-semibold group-hover:translate-x-2 transition-transform">
-            Đăng nhập ngay &rarr;
-          </div>
+          <div className="text-gray-300 group-hover:text-blue-600">➔</div>
         </Link>
 
-        {/* 2. TÀI XẾ (Driver) */}
-        <Link 
-          to="/driver/login"
-          className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-t-4 border-green-600"
-        >
-          <div className="absolute top-4 right-4 text-6xl opacity-10 group-hover:opacity-20 transition-opacity">
-            🚖
+        {/* 2. TÀI XẾ */}
+        <Link to="/driver/login" className="group flex items-center p-4 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-green-500 hover:shadow-md transition-all active:scale-[0.98]">
+          <div className="w-14 h-14 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-2xl mr-4 group-hover:bg-green-600 group-hover:text-white transition-colors">🚖</div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-gray-800">Tài Xế</h2>
+            <p className="text-xs text-gray-400">Nhận chuyến, dẫn đường</p>
           </div>
-          <div className="text-4xl mb-4 bg-green-100 w-16 h-16 flex items-center justify-center rounded-full text-green-600">
-            🚖
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2 group-hover:text-green-600 transition-colors">
-            Tài Xế
-          </h2>
-          <p className="text-gray-500">
-            Nhận chuyến xe, xem lộ trình đón trả khách và quản lý công việc.
-          </p>
-          <div className="mt-6 flex items-center text-green-600 font-semibold group-hover:translate-x-2 transition-transform">
-            Vào cổng tài xế &rarr;
-          </div>
+          <div className="text-gray-300 group-hover:text-green-600">➔</div>
         </Link>
 
-        {/* 3. QUẢN TRỊ VIÊN (Admin) */}
-        <Link 
-          to="/admin/login"
-          className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-t-4 border-purple-800"
-        >
-          <div className="absolute top-4 right-4 text-6xl opacity-10 group-hover:opacity-20 transition-opacity">
-            👮‍♂️
+        {/* 3. ADMIN */}
+        <Link to="/admin/login" className="group flex items-center p-4 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-purple-600 hover:shadow-md transition-all active:scale-[0.98]">
+          <div className="w-14 h-14 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-2xl mr-4 group-hover:bg-purple-600 group-hover:text-white transition-colors">👮‍♂️</div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-gray-800">Quản Trị</h2>
+            <p className="text-xs text-gray-400">Thống kê, quản lý</p>
           </div>
-          <div className="text-4xl mb-4 bg-purple-100 w-16 h-16 flex items-center justify-center rounded-full text-purple-800">
-            👮‍♂️
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2 group-hover:text-purple-800 transition-colors">
-            Quản Trị Viên
-          </h2>
-          <p className="text-gray-500">
-            Quản lý hệ thống, xem báo cáo thống kê và cấp quyền truy cập.
-          </p>
-          <div className="mt-6 flex items-center text-purple-800 font-semibold group-hover:translate-x-2 transition-transform">
-            Truy cập quản lý &rarr;
-          </div>
+          <div className="text-gray-300 group-hover:text-purple-600">➔</div>
         </Link>
 
       </div>
-
-      {/* Footer */}
-      <div className="mt-12 text-gray-400 text-sm">
-        © 2024 GTTM Auto Shuttle System. All rights reserved.
+      
+      <div className="mt-12 text-center text-xs text-gray-400">
+        © Nhóm 3 - Hệ thống đặt xe trung chuyển thông minh 
       </div>
     </div>
   );
