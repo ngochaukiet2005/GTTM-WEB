@@ -15,7 +15,7 @@ const PassengerLayout = () => {
         <div className="p-4 md:p-6 flex md:block justify-between items-center">
           {/* Logo */}
           <div className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tighter">
-            GTTM <span className="text-blue-600">Passenger</span>
+            HỆ THỐNG ĐẶT XE TRUNG CHUYỂN <span className="text-blue-600">KHÁCH HÀNG</span>
           </div>
 
           {/* Menu Desktop */}
