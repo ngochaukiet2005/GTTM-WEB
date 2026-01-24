@@ -1,7 +1,7 @@
 // src/features/admin/AdminReviews.jsx
 
 import React, { useEffect, useState } from 'react';
-import { mockService } from '../../core/services/mockApi';
+import { mockService } from '../../core/services/mockApiPassenger';
 
 const AdminReviews = () => {
   const [reviews, setReviews] = useState([]);
