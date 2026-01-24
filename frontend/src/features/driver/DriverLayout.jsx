@@ -1,5 +1,3 @@
-// src/features/driver/DriverLayout.jsx
-
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -63,13 +61,21 @@ const DriverLayout = () => {
                 label="Hành trình chạy" 
                 active={location.pathname === '/driver/trip'} 
             />
+
+            {/* 👇 MỚI THÊM: LỊCH SỬ (DESKTOP) */}
+            <SidebarItem 
+                to="/driver/history" 
+                icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />} 
+                label="Lịch sử hoạt động" 
+                active={location.pathname === '/driver/history'} 
+            />
             
             <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6">Cá nhân</p>
 
             <SidebarItem 
                 to="/driver/profile" 
                 icon={<path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />} 
-                label="Tài khoản" 
+                label="Thông tin" 
                 active={location.pathname === '/driver/profile'} 
             />
         </nav>
@@ -102,6 +108,9 @@ const DriverLayout = () => {
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 flex justify-around p-2 pb-5 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] safe-area-bottom">
           <MobileNavItem to="/driver/home" icon={<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />} label="Home" active={location.pathname === '/driver/home'} />
           
+          {/* 👇 MỚI THÊM: LỊCH SỬ (MOBILE) - Nằm bên trái nút tròn */}
+          <MobileNavItem to="/driver/history" icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />} label="Lịch sử" active={location.pathname === '/driver/history'} />
+
           <div className="relative -top-6">
               <Link to="/driver/trip" className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl border-4 border-slate-50 transition-transform active:scale-95 ${location.pathname === '/driver/trip' ? 'bg-green-600 text-white shadow-green-400/40' : 'bg-slate-800 text-white'}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">

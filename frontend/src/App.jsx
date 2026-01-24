@@ -13,11 +13,12 @@ import PassengerDashboard from './features/passenger/PassengerDashboard';
 import PassengerBooking from './features/passenger/PassengerBooking'; 
 import PassengerProfile from './features/passenger/PassengerProfile';
 import TripHistory from './features/passenger/TripHistory';
+
+import DriverLayout from './features/driver/DriverLayout';
 import DriverHome from './features/driver/DriverHome';
 import DriverTrip from './features/driver/DriverTrip';
-import DriverLayout from './features/driver/DriverLayout';
-
-// 👇 IMPORT MỚI
+import DriverHistory from './features/driver/DriverHistory'; // 👈 Import mới
+import DriverProfile from './features/driver/DriverProfile';
 import AdminReviews from './features/admin/AdminReviews';
 
 function App() {
@@ -43,18 +44,14 @@ function App() {
 
         {/* DRIVER */}
         <Route path="/driver" element={<DriverLayout />}>
-             {/* Trang chủ mặc định khi vào /driver là về home */}
              <Route index element={<Navigate to="home" replace />} />
-             
-             {/* Các trang con, chúng sẽ hiện vào chỗ <Outlet /> */}
              <Route path="home" element={<DriverHome />} />
              <Route path="trip" element={<DriverTrip />} />
-             
-             {/* Nếu có profile thì thêm vào đây */}
-             {/* <Route path="profile" element={<DriverProfile />} /> */}
+             <Route path="history" element={<DriverHistory />} /> {/* 👈 Route mới */}
+              <Route path="profile" element={<DriverProfile />} />
         </Route>
         
-        {/* 👇 ROUTE MỚI CHO ADMIN */}
+        {/* ADMIN */}
         <Route path="/admin/reviews" element={<AdminReviews />} />
 
       </Routes>
