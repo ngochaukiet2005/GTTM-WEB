@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom'; 
 import AppMap from "../map/AppMap"; 
-import { mockService } from '../../core/services/mockApi';
+import { mockService } from '../../core/services/mockApiPassenger';
 // 👇 IMPORT THƯ VIỆN THÔNG BÁO "XỊN"
 import Swal from 'sweetalert2'; 
 

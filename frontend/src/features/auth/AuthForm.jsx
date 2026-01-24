@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2'; 
-import { mockService } from '../../core/services/mockApi'; 
+import { mockService } from '../../core/services/mockApiPassenger';
 
 // ✅ THÊM onSubmit vào danh sách props nhận về
 const AuthForm = ({ role, type, onSubmit }) => {
@@ -77,7 +77,7 @@ const AuthForm = ({ role, type, onSubmit }) => {
         localStorage.setItem('currentUser', JSON.stringify(response.user));
 
         if (role === 'admin') navigate('/admin/dashboard');
-        if (role === 'driver') navigate('/driver/trips');
+        if (role === 'driver') navigate('/driver/home');
         if (role === 'passenger') navigate('/passenger/dashboard');
       } else {
         // --- 2. XỬ LÝ ĐĂNG KÝ MẶC ĐỊNH (CHO DRIVER HOẶC ADMIN NẾU CẦN) ---
