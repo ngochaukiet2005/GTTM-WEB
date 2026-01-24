@@ -19,13 +19,14 @@ class EmailService {
                 : "Reset your password";
 
         await this.transporter.sendMail({
-            from: `"FEPA" <${process.env.EMAIL_USER}>`,
+            from: `"Smart Shuttle Dispatch System" <${process.env.EMAIL_USER}>`,
             to: email,
             subject,
             html: `
         <h3>Your OTP Code</h3>
         <h1>${otp}</h1>
         <p>This code will expire in 5 minutes.</p>
+        <p>Thank you for using Smart Shuttle Dispatch System</p>
       `
         });
     }
