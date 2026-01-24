@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom'; 
 import AppMap from "../map/AppMap"; 
-import { mockService } from '../../core/services/mockApi';
+import { mockService } from '../../core/services/mockApiPassenger';
 // 👇 IMPORT THƯ VIỆN THÔNG BÁO "XỊN"
 import Swal from 'sweetalert2'; 
 
@@ -21,7 +21,7 @@ const BUS_STATIONS = [
   "Bến xe Mỹ Tho"
 ];
 
-const FIXED_SLOTS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+const FIXED_SLOTS = [2-3, 4-5, 6-7, 8-9, 10-11, 12-13, 14-15, 16-17, 18-19, 20-21, 22-23];
 
 const PassengerBooking = () => {
   const navigate = useNavigate();

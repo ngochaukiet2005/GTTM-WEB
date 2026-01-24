@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import AuthLayout from '../auth/AuthLayout';
 import AuthForm from '../auth/AuthForm';
-import { mockService } from '../../core/services/mockApi';
+import { mockService } from '../../core/services/mockApiPassenger';
 
 const PassengerAuth = () => {
   const location = useLocation();

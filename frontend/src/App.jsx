@@ -13,9 +13,12 @@ import PassengerDashboard from './features/passenger/PassengerDashboard';
 import PassengerBooking from './features/passenger/PassengerBooking'; 
 import PassengerProfile from './features/passenger/PassengerProfile';
 import TripHistory from './features/passenger/TripHistory';
-import DriverHome from './features/driver/DriverHome';
 
-// 👇 IMPORT MỚI
+import DriverLayout from './features/driver/DriverLayout';
+import DriverHome from './features/driver/DriverHome';
+import DriverTrip from './features/driver/DriverTrip';
+import DriverHistory from './features/driver/DriverHistory'; // 👈 Import mới
+import DriverProfile from './features/driver/DriverProfile';
 import AdminReviews from './features/admin/AdminReviews';
 
 function App() {
@@ -40,9 +43,15 @@ function App() {
         </Route>
 
         {/* DRIVER */}
-        <Route path="/driver/home" element={<DriverHome />} />
+        <Route path="/driver" element={<DriverLayout />}>
+             <Route index element={<Navigate to="home" replace />} />
+             <Route path="home" element={<DriverHome />} />
+             <Route path="trip" element={<DriverTrip />} />
+             <Route path="history" element={<DriverHistory />} /> {/* 👈 Route mới */}
+              <Route path="profile" element={<DriverProfile />} />
+        </Route>
         
-        {/* 👇 ROUTE MỚI CHO ADMIN */}
+        {/* ADMIN */}
         <Route path="/admin/reviews" element={<AdminReviews />} />
 
       </Routes>
