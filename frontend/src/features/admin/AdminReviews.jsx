@@ -1,44 +1,69 @@
 // src/features/admin/AdminReviews.jsx
-
 import React, { useEffect, useState } from 'react';
-import { mockService } from '../../core/services/mockApiPassenger';
+import { mockApiAdmin } from '../../core/services/mockApiAdmin';
 
 const AdminReviews = () => {
-  const [reviews, setReviews] = useState([]);
+  const [reviewGroups, setReviewGroups] = useState([]);
 
   useEffect(() => {
-    mockService.getAllReviews().then(setReviews);
+    mockApiAdmin.getAllReviews().then(setReviewGroups);
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Phản hồi khách hàng</h1>
-        
-        <div className="grid gap-4">
-          {reviews.length === 0 ? (
-            <p className="text-gray-500">Chưa có đánh giá nào.</p>
-          ) : (
-            reviews.map(review => (
-              <div key={review.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex gap-4">
-                 <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl shrink-0">
-                    {review.rating}
-                 </div>
-                 <div>
-                    <h3 className="font-bold text-gray-800">Chuyến đi của {review.driverName}</h3>
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="text-yellow-500 text-sm">{'⭐'.repeat(review.rating)}</span>
-                        <span className="text-gray-300 text-sm">{'⭐'.repeat(5 - review.rating)}</span>
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-10 text-center">
+        <h1 className="text-3xl font-bold text-slate-800">Phản hồi từ Hành khách</h1>
+        <p className="text-slate-500">Lịch sử đánh giá chất lượng dịch vụ theo thời gian.</p>
+      </div>
+      
+      <div className="space-y-12">
+        {reviewGroups.map((group) => (
+          <div key={group.id} className="relative">
+             {/* Date Divider */}
+             <div className="sticky top-0 z-10 flex justify-center mb-6">
+                <span className="bg-slate-800 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg shadow-slate-300/50">
+                    {group.date}
+                </span>
+             </div>
+
+             {/* Timeline Items */}
+             <div className="border-l-2 border-slate-200 ml-4 md:ml-6 space-y-8 pb-4">
+                {group.items.map((review) => (
+                    <div key={review.id} className="relative pl-8 md:pl-10">
+                        {/* Timeline Dot */}
+                        <div className="absolute -left-[9px] top-6 w-5 h-5 bg-white border-4 border-blue-500 rounded-full"></div>
+                        
+                        {/* Review Card */}
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-3">
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-slate-400 font-mono text-xs font-bold bg-slate-100 px-2 py-1 rounded">{review.time}</span>
+                                        <h4 className="font-bold text-slate-800 text-lg">Chuyến xe của {review.driver}</h4>
+                                    </div>
+                                    <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
+                                        <span>🚗 {review.plate}</span>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="text-slate-600 font-medium">{review.route}</span>
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-1 bg-yellow-50 px-3 py-1.5 rounded-lg border border-yellow-100 self-start">
+                                    <span className="font-black text-yellow-600 text-lg">{review.rating}</span>
+                                    <span className="text-yellow-500">★</span>
+                                </div>
+                            </div>
+                            
+                            {/* Comment Box */}
+                            <div className="bg-slate-50 p-4 rounded-xl relative">
+                                <span className="absolute -top-2 left-6 w-4 h-4 bg-slate-50 rotate-45 transform"></span>
+                                <p className="text-slate-700 italic">"{review.comment}"</p>
+                            </div>
+                        </div>
                     </div>
-                    {review.comment && (
-                        <p className="text-gray-600 italic mb-2">"{review.comment}"</p>
-                    )}
-                    <p className="text-xs text-gray-400">{review.date}</p>
-                 </div>
-              </div>
-            ))
-          )}
-        </div>
+                ))}
+             </div>
+          </div>
+        ))}
       </div>
     </div>
   );
