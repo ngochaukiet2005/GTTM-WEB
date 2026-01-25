@@ -52,3 +52,10 @@ exports.changePassword = asyncHandler(async (req, res) => {
     const result = await authService.changePassword(req.user.id, oldPassword, newPassword);
     res.status(200).json(result);
 });
+
+exports.getMe = asyncHandler(async (req, res, next) => {
+    res.status(200).json({
+        status: "success",
+        user: req.user
+    });
+});
