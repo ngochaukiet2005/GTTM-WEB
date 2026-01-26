@@ -26,12 +26,12 @@ const AdminLayout = () => {
     { name: 'Quản lý Chuyến xe', path: '/admin/trips', icon: '🚗' },
     { name: 'Quản lý Tài xế', path: '/admin/drivers', icon: '👮‍♂️' },
     { name: 'Đánh giá & Góp ý', path: '/admin/reviews', icon: '⭐' },
-    { name: 'Cài đặt hệ thống', path: '/admin/settings', icon: '⚙️' },
+    { name: 'Tài khoản', path: '/admin/accounts', icon: '👤' }, 
   ];
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
-      {/* SIDEBAR */}
+      {/* SIDEBAR - Giữ nguyên */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20">
         <div className="h-20 flex items-center justify-center border-b border-slate-700">
           <h1 className="text-2xl font-black text-blue-500 tracking-tighter">
@@ -70,21 +70,11 @@ const AdminLayout = () => {
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header nhỏ phía trên */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-8 z-10">
-          <h2 className="font-bold text-slate-700 text-lg">Hệ thống quản lý xe trung chuyển</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-slate-500">Xin chào, Admin</span>
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold border border-blue-200">
-              AD
-            </div>
-          </div>
-        </header>
-
-        {/* Nội dung thay đổi (Dashboard, Reviews,...) */}
-        <div className="flex-1 overflow-auto p-8 relative">
+      {/* MAIN CONTENT */}
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Đã xóa phần Header ở đây */}
+        
+        <div className="flex-1 overflow-auto p-8">
            <Outlet />
         </div>
       </main>
