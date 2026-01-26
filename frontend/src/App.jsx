@@ -24,6 +24,7 @@ import AdminLayout from './features/admin/AdminLayout';
 import AdminDashboard from './features/admin/AdminDashboard';
 import AdminTrips from './features/admin/AdminTrips';
 import AdminDrivers from './features/admin/AdminDrivers';
+import AdminProfile from './features/admin/AdminProfile'; 
 
 function App() {
   return (
@@ -62,6 +63,7 @@ function App() {
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="trips" element={<AdminTrips />} />
             <Route path="drivers" element={<AdminDrivers />} />
+            <Route path="accounts" element={<AdminProfile />} />
         </Route>
 
       </Routes>
