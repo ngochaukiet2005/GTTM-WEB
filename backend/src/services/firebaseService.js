@@ -1,10 +1,12 @@
 const admin = require('firebase-admin');
-const serviceAccount = require('./path/to/serviceAccountKey.json');
+const serviceAccount = require('../configs/serviceAccountKey.json');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://your-project-id.firebaseio.com"
-});
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://gttm-shuttle-default-rtdb.firebaseio.com" // Use your real RTDB URL
+  });
+}
 
 const db = admin.database();
 
