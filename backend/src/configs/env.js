@@ -6,5 +6,7 @@ module.exports = {
     jwtSecret: process.env.JWT_SECRET,
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
     emailUser: process.env.EMAIL_USER,
-    emailPass: process.env.EMAIL_PASS
+    emailPass: process.env.EMAIL_PASS,
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY
 };
+

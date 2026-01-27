@@ -34,7 +34,8 @@ exports.createTrip = async (req, res) => {
       status: 'ready'
     });
 
-    await FirebaseService.updateWaypointStatus(newTrip._id, 0, 'initialized');
+    // Sync to Firebase
+    await FirebaseService.initializeTrip(newTrip._id, driverId, vehicleId, formattedRoute);
 
     res.status(201).json({ status: "success", data: newTrip });
   } catch (error) {
@@ -62,9 +63,10 @@ exports.updateStopStatus = async (req, res, next) => {
     const trip = await Trip.findById(tripId);
     if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    const stop = trip.route.find(item => item.requestId.toString() === requestId);
-    if (!stop) return res.status(404).json({ message: "Stop not found in this trip" });
+    const stopIndex = trip.route.findIndex(item => item.requestId.toString() === requestId);
+    if (stopIndex === -1) return res.status(404).json({ message: "Stop not found in this trip" });
 
+    const stop = trip.route[stopIndex];
     stop.status = status;
 
     // Map internal stop status to Request status
@@ -80,13 +82,18 @@ exports.updateStopStatus = async (req, res, next) => {
       });
     }
 
+    // Sync to Firebase
+    await FirebaseService.updateWaypointStatus(tripId, stopIndex, status);
+
     // Auto-complete trip if all stops done
     const allDone = trip.route.every(s => ["dropped_off", "no_show"].includes(s.status));
     if (allDone) {
       trip.status = "completed";
       await Driver.findByIdAndUpdate(trip.driverId, { status: "active" });
+      await FirebaseService.updateTripStatus(tripId, "completed");
     } else {
       trip.status = "running";
+      await FirebaseService.updateTripStatus(tripId, "running");
     }
 
     await trip.save();
@@ -95,6 +102,7 @@ exports.updateStopStatus = async (req, res, next) => {
     next(error);
   }
 };
+
 
 exports.getAllTrips = async (req, res, next) => {
   try {

@@ -1,31 +1,71 @@
-const admin = require('firebase-admin');
-const serviceAccount = require('../configs/serviceAccountKey.json');
-
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://gttm-shuttle-default-rtdb.firebaseio.com" // Use your real RTDB URL
-  });
-}
-
-const db = admin.database();
+const db = require('../configs/firebase');
 
 const FirebaseService = {
+  // Initialize trip data in Realtime Database
+  initializeTrip: async (tripId, driverId, vehicleId, waypoints) => {
+    try {
+      await db.ref(`trips_realtime/${tripId}`).set({
+        driverId,
+        vehicleId,
+        status: 'ready',
+        currentWaypointIndex: 0,
+        updatedAt: Date.now()
+      });
+
+      // Initialize waypoints status
+      const waypointsData = {};
+      waypoints.forEach((wp, index) => {
+        waypointsData[index] = {
+          requestId: wp.requestId,
+          location: wp.location,
+          type: wp.type,
+          status: 'pending',
+          order: wp.order
+        };
+      });
+
+      await db.ref(`trips_realtime/${tripId}/waypoints`).set(waypointsData);
+    } catch (error) {
+      console.error('Firebase initializeTrip error:', error);
+      throw error;
+    }
+  },
+
   // CN-TX-04: Cập nhật tọa độ tài xế mỗi 5s 
-  updateDriverLocation: (driverId, lat, lng) => {
-    return db.ref(`drivers_location/${driverId}`).set({
-      lat,
-      lng,
-      updatedAt: Date.now()
-    });
+  updateDriverLocation: async (driverId, lat, lng) => {
+    try {
+      return await db.ref(`drivers_location/${driverId}`).set({
+        lat,
+        lng,
+        updatedAt: Date.now()
+      });
+    } catch (error) {
+      console.error('Firebase updateDriverLocation error:', error);
+    }
   },
 
   // CN-HT-02: Đồng bộ trạng thái từng điểm dừng 
-  updateWaypointStatus: (tripId, waypointIndex, status) => {
-    return db.ref(`trips_status/${tripId}/waypoints/${waypointIndex}`).update({
-      status, // 'waiting', 'picked_up', 'dropped_off' 
-      timestamp: Date.now()
-    });
+  updateWaypointStatus: async (tripId, waypointIndex, status) => {
+    try {
+      return await db.ref(`trips_realtime/${tripId}/waypoints/${waypointIndex}`).update({
+        status, // 'pending', 'picked_up', 'dropped_off', 'no_show' 
+        updatedAt: Date.now()
+      });
+    } catch (error) {
+      console.error('Firebase updateWaypointStatus error:', error);
+    }
+  },
+
+  // Update overall trip status
+  updateTripStatus: async (tripId, status) => {
+    try {
+      return await db.ref(`trips_realtime/${tripId}`).update({
+        status, // 'ready', 'running', 'completed'
+        updatedAt: Date.now()
+      });
+    } catch (error) {
+      console.error('Firebase updateTripStatus error:', error);
+    }
   }
 };
 
