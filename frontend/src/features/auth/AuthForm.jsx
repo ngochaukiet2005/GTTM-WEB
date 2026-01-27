@@ -1,125 +1,115 @@
 // src/features/auth/AuthForm.jsx
 
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2'; 
-import { mockService } from '../../core/services/mockApiPassenger';
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
+import { apiClient, storeTokens } from "../../core/apiClient";
 
 // ✅ THÊM onSubmit vào danh sách props nhận về
 const AuthForm = ({ role, type, onSubmit }) => {
-  const isLogin = type === 'login';
+  const isLogin = type === "login";
   const navigate = useNavigate();
-  
+
   // State quản lý UI
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // State quản lý input
   const [formData, setFormData] = useState({
-    username: '',        
-    password: '',
-    fullName: '',
-    email: '',           
-    phone: '',           
-    gender: 'male',      
-    confirmPassword: ''  
+    username: "",
+    password: "",
+    fullName: "",
+    email: "",
+    phone: "",
+    gender: "male",
+    confirmPassword: "",
   });
 
   // Reset form khi chuyển đổi giữa Login và Register
   useEffect(() => {
     setFormData({
-        username: '',        
-        password: '',
-        fullName: '',
-        email: '',           
-        phone: '',           
-        gender: 'male',      
-        confirmPassword: ''  
+      username: "",
+      password: "",
+      fullName: "",
+      email: "",
+      phone: "",
+      gender: "male",
+      confirmPassword: "",
     });
-    setError('');
+    setError("");
   }, [type, role]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError('');
+    setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-        // --- VALIDATION CƠ BẢN TRƯỚC ---
-        if (!isLogin && role === 'passenger') {
-            if (formData.password !== formData.confirmPassword) {
-                throw new Error("Mật khẩu xác nhận không khớp!");
-            }
-            if (formData.phone.length < 9) {
-                throw new Error("Số điện thoại không hợp lệ!");
-            }
+      // --- VALIDATION CƠ BẢN TRƯỚC ---
+      if (!isLogin && role === "passenger") {
+        if (formData.password !== formData.confirmPassword) {
+          throw new Error("Mật khẩu xác nhận không khớp!");
         }
+        if (formData.phone.length < 9) {
+          throw new Error("Số điện thoại không hợp lệ!");
+        }
+      }
 
-        // ✅ QUAN TRỌNG: Kiểm tra nếu có hàm onSubmit từ bên ngoài (logic OTP) thì chạy nó
-        if (onSubmit) {
-            // Gọi hàm xử lý OTP bên PassengerAuth và dừng logic mặc định tại đây
-            await onSubmit(formData);
-            setLoading(false); 
-            return; 
-        }
+      // ✅ QUAN TRỌNG: Kiểm tra nếu có hàm onSubmit từ bên ngoài (logic OTP) thì chạy nó
+      if (onSubmit) {
+        // Gọi hàm xử lý OTP bên PassengerAuth và dừng logic mặc định tại đây
+        await onSubmit(formData);
+        setLoading(false);
+        return;
+      }
 
       // --- LOGIC MẶC ĐỊNH (NẾU KHÔNG CÓ OTP) ---
       if (isLogin) {
-        // --- 1. XỬ LÝ ĐĂNG NHẬP ---
-        const response = await mockService.login(formData.username, formData.password, role);
-        console.log("Login thành công:", response);
+        // --- 1. XỬ LÝ ĐĂNG NHẬP VỚI API THẬT ---
+        const response = await apiClient.login({
+          identifier: formData.username,
+          password: formData.password,
+        });
 
-        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        // Lưu token + user để các màn khác dùng
+        storeTokens({
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+          user: response.user,
+        });
+        localStorage.setItem("currentUser", JSON.stringify(response.user));
 
-        if (role === 'admin') navigate('/admin/dashboard');
-        if (role === 'driver') navigate('/driver/home');
-        if (role === 'passenger') navigate('/passenger/dashboard');
+        if (role === "admin") navigate("/admin/dashboard");
+        if (role === "driver") navigate("/driver/home");
+        if (role === "passenger") navigate("/passenger/dashboard");
       } else {
-        // --- 2. XỬ LÝ ĐĂNG KÝ MẶC ĐỊNH (CHO DRIVER HOẶC ADMIN NẾU CẦN) ---
-        await mockService.register({
-            username: formData.email, 
-            fullName: formData.fullName,
-            email: formData.email,
-            phone: formData.phone,
-            password: formData.password,
-            gender: formData.gender,
-            role: role
-        });
-        
-        Swal.fire({
-          title: 'Đăng ký thành công!',
-          text: 'Chào mừng bạn đến với Hệ thống đặt xe trung chuyển. Vui lòng đăng nhập để tiếp tục.',
-          icon: 'success',
-          confirmButtonText: 'Đồng ý',
-          confirmButtonColor: '#2563EB',
-          allowOutsideClick: false,
-        }).then((result) => {
-          if (result.isConfirmed) {
-            navigate('/passenger/login'); 
-          }
-        });
+        // --- 2. ĐĂNG KÝ THẬT YÊU CẦU THÊM TRƯỜNG, CHƯA BẬT ---
+        setError(
+          "Đăng ký thật chưa được bật. Vui lòng dùng tài khoản đã kích hoạt để đăng nhập.",
+        );
       }
     } catch (err) {
       setError(err.message || "Có lỗi xảy ra");
-      Swal.fire('Lỗi', err.message, 'error');
+      Swal.fire("Lỗi", err.message, "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const btnColor = 
-    role === 'driver' ? 'bg-green-600 hover:bg-green-700' : 
-    role === 'admin' ? 'bg-purple-800 hover:bg-purple-900' : 
-    'bg-blue-600 hover:bg-blue-700';
+  const btnColor =
+    role === "driver"
+      ? "bg-green-600 hover:bg-green-700"
+      : role === "admin"
+        ? "bg-purple-800 hover:bg-purple-900"
+        : "bg-blue-600 hover:bg-blue-700";
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      
       {error && (
         <div className="p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg text-sm text-center">
           ⚠️ {error}
@@ -127,135 +117,175 @@ const AuthForm = ({ role, type, onSubmit }) => {
       )}
 
       {/* --- CÁC TRƯỜNG ĐĂNG KÝ (CHỈ HIỆN KHI !ISLOGIN & PASSENGER) --- */}
-      {!isLogin && role === 'passenger' && (
+      {!isLogin && role === "passenger" && (
         <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Họ và tên
+            </label>
+            <input
+              name="fullName"
+              type="text"
+              required
+              className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+              placeholder="Nguyễn Văn A"
+              onChange={handleChange}
+              value={formData.fullName}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Họ và tên</label>
-              <input 
-                name="fullName"
-                type="text" 
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+              </label>
+              <input
+                name="email"
+                type="email"
                 required
-                className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
-                placeholder="Nguyễn Văn A" 
+                className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                placeholder="email@vidu.com"
                 onChange={handleChange}
-                value={formData.fullName}
+                value={formData.email}
+                autoComplete="email"
               />
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <input 
-                        name="email"
-                        type="email" 
-                        required
-                        className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
-                        placeholder="email@vidu.com" 
-                        onChange={handleChange}
-                        value={formData.email}
-                        autoComplete="email"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">SĐT</label>
-                    <input 
-                        name="phone"
-                        type="tel" 
-                        required
-                        className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
-                        placeholder="090..." 
-                        onChange={handleChange}
-                        value={formData.phone}
-                        autoComplete="tel"
-                    />
-                </div>
-            </div>
-
             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label>
-                 <div className="flex gap-4">
-                    <label className={`flex-1 py-2 rounded-lg border cursor-pointer text-center text-sm font-bold ${formData.gender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500'}`}>
-                        <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="hidden" />
-                        Nam 👨
-                    </label>
-                    <label className={`flex-1 py-2 rounded-lg border cursor-pointer text-center text-sm font-bold ${formData.gender === 'female' ? 'border-pink-500 bg-pink-50 text-pink-600' : 'border-gray-200 text-gray-500'}`}>
-                        <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="hidden" />
-                        Nữ 👩
-                    </label>
-                 </div>
+              <label className="block text-sm font-medium text-gray-700">
+                SĐT
+              </label>
+              <input
+                name="phone"
+                type="tel"
+                required
+                className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                placeholder="090..."
+                onChange={handleChange}
+                value={formData.phone}
+                autoComplete="tel"
+              />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Giới tính
+            </label>
+            <div className="flex gap-4">
+              <label
+                className={`flex-1 py-2 rounded-lg border cursor-pointer text-center text-sm font-bold ${formData.gender === "male" ? "border-blue-500 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-500"}`}
+              >
+                <input
+                  type="radio"
+                  name="gender"
+                  value="male"
+                  checked={formData.gender === "male"}
+                  onChange={handleChange}
+                  className="hidden"
+                />
+                Nam 👨
+              </label>
+              <label
+                className={`flex-1 py-2 rounded-lg border cursor-pointer text-center text-sm font-bold ${formData.gender === "female" ? "border-pink-500 bg-pink-50 text-pink-600" : "border-gray-200 text-gray-500"}`}
+              >
+                <input
+                  type="radio"
+                  name="gender"
+                  value="female"
+                  checked={formData.gender === "female"}
+                  onChange={handleChange}
+                  className="hidden"
+                />
+                Nữ 👩
+              </label>
+            </div>
+          </div>
         </>
       )}
-      
+
       {/* --- TRƯỜNG TÊN ĐĂNG NHẬP / EMAIL (CHUNG) --- */}
-      {(isLogin || role !== 'passenger') && (
+      {(isLogin || role !== "passenger") && (
         <div>
-            <label className="block text-sm font-medium text-gray-700">
-            {role === 'passenger' ? 'Email hoặc Số điện thoại' : 'Tên đăng nhập'}
-            </label>
-            <input 
+          <label className="block text-sm font-medium text-gray-700">
+            {role === "passenger"
+              ? "Email hoặc Số điện thoại"
+              : "Tên đăng nhập"}
+          </label>
+          <input
             name="username"
-            type="text" 
+            type="text"
             required
-            className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
-            placeholder={role === 'passenger' ? "VD: 0905... hoặc abc@gmail.com" : "Ví dụ: admin"} 
+            className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+            placeholder={
+              role === "passenger"
+                ? "VD: 0905... hoặc abc@gmail.com"
+                : "Ví dụ: admin"
+            }
             onChange={handleChange}
             value={formData.username}
-            autoComplete="username" 
-            />
+            autoComplete="username"
+          />
         </div>
       )}
 
       {/* --- MẬT KHẨU (CHUNG) --- */}
-      <div className={!isLogin && role === 'passenger' ? "grid grid-cols-2 gap-4" : ""}>
+      <div
+        className={
+          !isLogin && role === "passenger" ? "grid grid-cols-2 gap-4" : ""
+        }
+      >
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Mật khẩu
+          </label>
+          <input
+            name="password"
+            type="password"
+            required
+            className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+            placeholder="••••••"
+            onChange={handleChange}
+            value={formData.password}
+            autoComplete={!isLogin ? "new-password" : "current-password"}
+          />
+        </div>
+
+        {/* Nhập lại mật khẩu (Chỉ khi đăng ký Passenger) */}
+        {!isLogin && role === "passenger" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">Mật khẩu</label>
-            <input 
-                name="password"
-                type="password" 
-                required
-                className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
-                placeholder="••••••" 
-                onChange={handleChange}
-                value={formData.password}
-                autoComplete={!isLogin ? "new-password" : "current-password"}
+            <label className="block text-sm font-medium text-gray-700">
+              Xác nhận MK
+            </label>
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+              placeholder="••••••"
+              onChange={handleChange}
+              value={formData.confirmPassword}
+              autoComplete="new-password"
             />
           </div>
-          
-          {/* Nhập lại mật khẩu (Chỉ khi đăng ký Passenger) */}
-          {!isLogin && role === 'passenger' && (
-             <div>
-                <label className="block text-sm font-medium text-gray-700">Xác nhận MK</label>
-                <input 
-                    name="confirmPassword"
-                    type="password" 
-                    required
-                    className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" 
-                    placeholder="••••••" 
-                    onChange={handleChange}
-                    value={formData.confirmPassword}
-                    autoComplete="new-password"
-                />
-             </div>
-          )}
+        )}
       </div>
 
-      <button 
+      <button
         disabled={loading}
-        className={`w-full py-3 mt-4 font-bold text-white rounded-lg shadow-md transition-all transform hover:scale-[1.02] ${btnColor} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+        className={`w-full py-3 mt-4 font-bold text-white rounded-lg shadow-md transition-all transform hover:scale-[1.02] ${btnColor} ${loading ? "opacity-70 cursor-not-allowed" : ""}`}
       >
-        {loading ? 'Đang xử lý...' : (isLogin ? 'Đăng Nhập' : 'Đăng Ký')}
+        {loading ? "Đang xử lý..." : isLogin ? "Đăng Nhập" : "Đăng Ký"}
       </button>
 
       <div className="text-center mt-4 text-sm text-gray-600">
-        {role === 'passenger' ? (
+        {role === "passenger" ? (
           <>
-            {isLogin ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
-            <Link 
-              to={isLogin ? '/passenger/register' : '/passenger/login'} 
+            {isLogin ? "Chưa có tài khoản? " : "Đã có tài khoản? "}
+            <Link
+              to={isLogin ? "/passenger/register" : "/passenger/login"}
               className="font-bold text-blue-600 hover:underline"
             >
-              {isLogin ? 'Đăng ký ngay' : 'Đăng nhập ngay'}
+              {isLogin ? "Đăng ký ngay" : "Đăng nhập ngay"}
             </Link>
           </>
         ) : (
