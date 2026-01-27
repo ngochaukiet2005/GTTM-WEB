@@ -1,28 +1,43 @@
 const axios = require('axios');
 
 const RoutingService = {
-  // CN-HT-01: Thuật toán phân xe và tối ưu lộ trình [cite: 60]
+  // Tối ưu lộ trình sử dụng Google Directions API
   optimizeTrip: async (origin, destinations) => {
-    // origin: {lat, lng} - Địa chỉ bến xe [cite: 61]
-    // destinations: [{lat, lng}, ...] - Danh sách khách hàng [cite: 61]
+    // origin: {lat, lng} - Điểm bắt đầu
+    // destinations: [{lat, lng}, ...] - Danh sách khách hàng
     
     const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
     const body = {
       origin: { location: { latLng: origin } },
-      destination: { location: { latLng: origin } }, // Quay lại bến hoặc điểm cuối
+      destination: { location: { latLng: origin } }, 
       intermediates: destinations.map(d => ({ location: { latLng: d } })),
       travelMode: 'DRIVE',
-      optimizeWaypointOrder: true, // Giải quyết TSP 
+      optimizeWaypointOrder: true, // Quan trọng: Giải quyết bài toán người giao hàng (TSP)
     };
 
-    const response = await axios.post(url, body, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': 'YOUR_GOOGLE_MAPS_API_KEY',
-        'X-Goog-FieldMask': 'routes.optimizedIntermediateWaypointIndex,routes.legs'
-      }
-    });
+    try {
+      const response = await axios.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': 'YOUR_GOOGLE_MAPS_API_KEY', // Thay bằng Key thật của bạn
+          'X-Goog-FieldMask': 'routes.optimizedIntermediateWaypointIndex,routes.legs'
+        }
+      });
 
-    return response.data; // Trả về mảng điểm dừng đã sắp xếp 
+      // BỔ SUNG: Trích xuất thứ tự các điểm đã được tối ưu
+      const optimizedOrder = response.data.routes[0].optimizedIntermediateWaypointIndex;
+      const optimizedDestinations = optimizedOrder.map(index => destinations[index]);
+
+      return {
+        order: optimizedOrder,
+        waypoints: optimizedDestinations,
+        legs: response.data.routes[0].legs
+      };
+    } catch (error) {
+      console.error("Routing Error:", error);
+      throw error;
+    }
   }
 };
+
+module.exports = RoutingService;
