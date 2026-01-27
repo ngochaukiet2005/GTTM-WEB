@@ -60,10 +60,9 @@ const userSchema = new mongoose.Schema(
 );
 
 // Pre-save middleware to hash password
-userSchema.pre("save", async function (next) {
-    if (!this.isModified("password")) return next();
+userSchema.pre("save", async function () {
+    if (!this.isModified("password")) return;
     this.password = await hash(this.password);
-    next();
 });
 
 // Method to compare password

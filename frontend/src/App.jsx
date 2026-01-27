@@ -20,6 +20,11 @@ import DriverTrip from './features/driver/DriverTrip';
 import DriverHistory from './features/driver/DriverHistory'; // 👈 Import mới
 import DriverProfile from './features/driver/DriverProfile';
 import AdminReviews from './features/admin/AdminReviews';
+import AdminLayout from './features/admin/AdminLayout';
+import AdminDashboard from './features/admin/AdminDashboard';
+import AdminTrips from './features/admin/AdminTrips';
+import AdminDrivers from './features/admin/AdminDrivers';
+import AdminProfile from './features/admin/AdminProfile'; 
 
 function App() {
   return (
@@ -52,7 +57,14 @@ function App() {
         </Route>
         
         {/* ADMIN */}
-        <Route path="/admin/reviews" element={<AdminReviews />} />
+        <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="reviews" element={<AdminReviews />} />
+            <Route path="trips" element={<AdminTrips />} />
+            <Route path="drivers" element={<AdminDrivers />} />
+            <Route path="accounts" element={<AdminProfile />} />
+        </Route>
 
       </Routes>
     </BrowserRouter>
