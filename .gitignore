@@ -34,3 +34,4 @@ npm-debug.log
 .idea/
 *.swp
 *.swo
+node_modules

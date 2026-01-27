@@ -10,8 +10,8 @@
 - React: xây dựng UI theo component
 - Vite: build tool nhanh
 - Tailwind CSS: responsive mobile & desktop
-- Google Maps JavaScript API: bản đồ nhúng
 - Firebase Realtime Database: tracking realtime
+-Bản đồ: OpenStreetMap + Leaflet
 - PWA: cài web như app
 
 ## Backend
