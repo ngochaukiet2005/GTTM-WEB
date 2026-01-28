@@ -6,7 +6,8 @@ const AppError = require("../utils/appError");
 // 1. LẤY DANH SÁCH TÀI XẾ
 exports.getAllDrivers = async (req, res, next) => {
   try {
-    const drivers = await Driver.find().populate("userId", "email isActive");
+    // Populate để lấy email từ bảng User
+    const drivers = await Driver.find().populate("userId", "email");
 
     const formattedDrivers = drivers.map(d => ({
       id: d._id,
@@ -14,8 +15,8 @@ exports.getAllDrivers = async (req, res, next) => {
       phone: d.phone,
       email: d.userId ? d.userId.email : "N/A", 
       plate: d.vehicleId,
-      status: (d.userId && !d.userId.isActive) ? "inactive" : "active",
-      isLocked: d.userId ? !d.userId.isActive : false,
+      status: d.status, // active, inactive
+      isLocked: d.status === 'inactive',
       rating: 5.0, 
       trips: 0
     }));
@@ -44,22 +45,23 @@ exports.createDriver = async (req, res, next) => {
       return next(new AppError("Email này đã được sử dụng!", 400));
     }
 
-    // A. Tạo User (Login) - Schema User dùng 'fullName' và 'numberPhone'
+    // A. Tạo User (Login)
+    // Lưu ý: User Model của bạn dùng 'fullName' và 'numberPhone'
     const newUser = await User.create({
-      fullName: name,        // <--- Khớp với User Model
+      fullName: name,       
       email,
       password: password, 
-      numberPhone: phone,    // <--- Khớp với User Model
+      numberPhone: phone,   
       role: "DRIVER",
-      isVerified: true,      // Admin tạo thì auto verify
-      isActive: true
+      isVerified: true      // Admin tạo thì auto verify, không cần gửi mail
     });
 
-    // B. Tạo Driver Profile - Schema Driver dùng 'name' và 'phone'
+    // B. Tạo Driver Profile
+    // Lưu ý: Driver Model của bạn dùng 'name' và 'phone'
     const newDriver = await Driver.create({
       userId: newUser._id,
-      name,                  // <--- Khớp với Driver Model
-      phone,                 // <--- Khớp với Driver Model
+      name,                 
+      phone,                
       vehicleId: plate,
       status: "active"
     });
@@ -74,18 +76,18 @@ exports.createDriver = async (req, res, next) => {
   }
 };
 
-// 3. KHÓA / MỞ KHÓA
+// 3. KHÓA / MỞ KHÓA TÀI XẾ
 exports.toggleDriverStatus = async (req, res, next) => {
     try {
         const { id } = req.params; 
         const driver = await Driver.findById(id);
+        
         if (!driver) return next(new AppError("Không tìm thấy tài xế", 404));
 
-        const user = await User.findById(driver.userId);
-        if (user) {
-            user.isActive = !user.isActive; 
-            await user.save();
-        }
+        // Đảo ngược trạng thái: active <-> inactive
+        driver.status = driver.status === 'active' ? 'inactive' : 'active';
+        await driver.save();
+
         res.status(200).json({ status: "success", message: "Đã cập nhật trạng thái" });
     } catch (error) {
         next(error);
@@ -99,6 +101,7 @@ exports.deleteDriver = async (req, res, next) => {
         const driver = await Driver.findById(id);
         if (!driver) return next(new AppError("Không tìm thấy tài xế", 404));
 
+        // Xóa cả User và Driver
         await User.findByIdAndDelete(driver.userId);
         await Driver.findByIdAndDelete(id);
 
