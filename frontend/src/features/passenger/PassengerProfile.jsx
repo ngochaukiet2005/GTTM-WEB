@@ -37,7 +37,7 @@ const PassengerProfile = () => {
 
     const loadProfile = async () => {
       try {
-        const res = await apiClient.getProfile(tokens.accessToken);
+        const res = await apiClient.getProfile();
         const passenger = res.data?.passenger || {};
         setFormData({
           id: passenger._id || storedUser.id || "",
@@ -100,7 +100,6 @@ const PassengerProfile = () => {
       const res = await apiClient.updateProfile({
         name: formData.fullName,
         phone: formData.phone,
-        token: tokens.accessToken,
       });
 
       const storedUser = JSON.parse(localStorage.getItem("currentUser")) || {};

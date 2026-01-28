@@ -1,250 +1,9 @@
 // Lightweight fetch-based API client
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const buildHeaders = (token, extra = {}) => ({
-  "Content-Type": "application/json",
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  ...extra,
-});
-
-const handleResponse = async (res) => {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message = data?.message || data?.error || `HTTP ${res.status}`;
-    throw new Error(message);
-  }
-  return data;
-};
-
-export const apiClient = {
-  login: async ({ identifier, password }) => {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ email: identifier, password }),
-    });
-    return handleResponse(res);
-  },
-
-  register: async ({
-    fullName,
-    email,
-    numberPhone,
-    password,
-    confirmPassword,
-    gender,
-  }) => {
-    const res = await fetch(`${API_BASE}/auth/register`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({
-        fullName,
-        email,
-        numberPhone,
-        password,
-        confirmPassword,
-        gender,
-      }),
-    });
-    return handleResponse(res);
-  },
-
-  verifyEmail: async ({ email, otp }) => {
-    const res = await fetch(`${API_BASE}/auth/verify-email`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ email, otp }),
-    });
-    return handleResponse(res);
-  },
-
-  resendOtp: async ({ email, purpose = "VERIFY" }) => {
-    const res = await fetch(`${API_BASE}/auth/resend-otp`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ email, purpose }),
-    });
-    return handleResponse(res);
-  },
-
-  createShuttleRequest: async ({
-    ticketCode,
-    pickupLocation,
-    dropoffLocation,
-    direction,
-    timeSlot,
-    token,
-  }) => {
-    const res = await fetch(`${API_BASE}/shuttle-request/request`, {
-      method: "POST",
-      headers: buildHeaders(token),
-      body: JSON.stringify({
-        ticketCode,
-        pickupLocation,
-        dropoffLocation,
-        direction,
-        timeSlot,
-      }),
-    });
-    return handleResponse(res);
-  },
-
-  getShuttleStatus: async (token) => {
-    const res = await fetch(`${API_BASE}/shuttle-request/status`, {
-      method: "GET",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  cancelRequest: async ({ id, token }) => {
-    const res = await fetch(`${API_BASE}/shuttle-request/${id}/cancel`, {
-      method: "PATCH",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  verifyTicket: async ({ ticketCode, token }) => {
-    const res = await fetch(`${API_BASE}/passenger/verify-ticket`, {
-      method: "POST",
-      headers: buildHeaders(token),
-      body: JSON.stringify({ ticketCode }),
-    });
-    return handleResponse(res);
-  },
-
-  getProfile: async (token) => {
-    const res = await fetch(`${API_BASE}/passenger/profile`, {
-      method: "GET",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  updateProfile: async ({ name, phone, token }) => {
-    const res = await fetch(`${API_BASE}/passenger/profile`, {
-      method: "PATCH",
-      headers: buildHeaders(token),
-      body: JSON.stringify({ name, phone }),
-    });
-    return handleResponse(res);
-  },
-
-  // Trip endpoints for passengers
-  createTrip: async ({
-    ticketCode,
-    pickupLocation,
-    dropoffLocation,
-    direction,
-    timeSlot,
-    token,
-  }) => {
-    const res = await fetch(`${API_BASE}/trips`, {
-      method: "POST",
-      headers: buildHeaders(token),
-      body: JSON.stringify({
-        ticketCode,
-        pickupLocation,
-        dropoffLocation,
-        direction,
-        timeSlot,
-      }),
-    });
-    return handleResponse(res);
-  },
-
-  getPassengerTrips: async (token) => {
-    const res = await fetch(`${API_BASE}/trips`, {
-      method: "GET",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  getTripById: async ({ tripId, token }) => {
-    const res = await fetch(`${API_BASE}/trips/${tripId}`, {
-      method: "GET",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  // Driver endpoints
-  getDriverTrips: async (token) => {
-    const res = await fetch(`${API_BASE}/driver/trips`, {
-      method: "GET",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  getDriverTripById: async ({ tripId, token }) => {
-    const res = await fetch(`${API_BASE}/driver/trips/${tripId}`, {
-      method: "GET",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  updateStopStatus: async ({ tripId, requestId, status, token }) => {
-    const res = await fetch(
-      `${API_BASE}/driver/trips/${tripId}/stop/${requestId}`,
-      {
-        method: "PATCH",
-        headers: buildHeaders(token),
-        body: JSON.stringify({ status }),
-      },
-    );
-    return handleResponse(res);
-  },
-
-  // Authentication additional methods
-  refreshToken: async (refreshToken) => {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ refreshToken }),
-    });
-    return handleResponse(res);
-  },
-
-  logout: async (token) => {
-    const res = await fetch(`${API_BASE}/auth/logout`, {
-      method: "POST",
-      headers: buildHeaders(token),
-    });
-    return handleResponse(res);
-  },
-
-  changePassword: async ({ oldPassword, newPassword, token }) => {
-    const res = await fetch(`${API_BASE}/auth/change-password`, {
-      method: "POST",
-      headers: buildHeaders(token),
-      body: JSON.stringify({ oldPassword, newPassword }),
-    });
-    return handleResponse(res);
-  },
-
-  forgotPassword: async ({ email }) => {
-    const res = await fetch(`${API_BASE}/auth/forgot-password`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ email }),
-    });
-    return handleResponse(res);
-  },
-
-  resetPassword: async ({ email, otp, newPassword }) => {
-    const res = await fetch(`${API_BASE}/auth/reset-password`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ email, otp, newPassword }),
-    });
-    return handleResponse(res);
-  },
-};
-
+/**
+ * Automatically retrieves tokens from localStorage
+ */
 export const getStoredTokens = () => {
   try {
     const raw = localStorage.getItem("authTokens");
@@ -260,4 +19,150 @@ export const storeTokens = (payload) => {
 
 export const clearTokens = () => {
   localStorage.removeItem("authTokens");
+};
+
+/**
+ * Builds headers with optional token. 
+ * If no token is provided, it tries to get it from storage.
+ */
+const buildHeaders = (token, extra = {}) => {
+  const finalToken = token || getStoredTokens()?.accessToken;
+  return {
+    "Content-Type": "application/json",
+    ...(finalToken ? { Authorization: `Bearer ${finalToken}` } : {}),
+    ...extra,
+  };
+};
+
+const handleResponse = async (res) => {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // If unauthorized, we might want to clear tokens, but let's keep it simple for now
+    const message = data?.message || data?.error || `HTTP ${res.status}`;
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
+  }
+  return data;
+};
+
+/**
+ * Generic request helper
+ */
+const request = async (path, options = {}) => {
+  const { method = "GET", body, token, headers: extraHeaders, ...rest } = options;
+
+  const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+
+  const res = await fetch(url, {
+    method,
+    headers: buildHeaders(token, extraHeaders),
+    body: body ? JSON.stringify(body) : undefined,
+    ...rest,
+  });
+
+  return handleResponse(res);
+};
+
+export const apiClient = {
+  // --- AUTH ---
+  login: async ({ identifier, password }) =>
+    request("/auth/login", {
+      method: "POST",
+      body: { email: identifier, password },
+    }),
+
+  register: async (data) =>
+    request("/auth/register", {
+      method: "POST",
+      body: data,
+    }),
+
+  verifyEmail: async ({ email, otp }) =>
+    request("/auth/verify-email", {
+      method: "POST",
+      body: { email, otp },
+    }),
+
+  resendOtp: async ({ email, purpose = "VERIFY" }) =>
+    request("/auth/resend-otp", {
+      method: "POST",
+      body: { email, purpose },
+    }),
+
+  refreshToken: async (refreshToken) =>
+    request("/auth/refresh", {
+      method: "POST",
+      body: { refreshToken },
+    }),
+
+  logout: async () =>
+    request("/auth/logout", { method: "POST" }),
+
+  changePassword: async ({ oldPassword, newPassword }) =>
+    request("/auth/change-password", {
+      method: "POST",
+      body: { oldPassword, newPassword },
+    }),
+
+  forgotPassword: async ({ email }) =>
+    request("/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+    }),
+
+  resetPassword: async ({ email, otp, newPassword }) =>
+    request("/auth/reset-password", {
+      method: "POST",
+      body: { email, otp, newPassword },
+    }),
+
+  // --- PASSENGER ---
+  getProfile: async () => request("/passenger/profile"),
+
+  updateProfile: async ({ name, phone }) =>
+    request("/passenger/profile", {
+      method: "PATCH",
+      body: { name, phone },
+    }),
+
+  verifyTicket: async ({ ticketCode }) =>
+    request("/passenger/verify-ticket", {
+      method: "POST",
+      body: { ticketCode },
+    }),
+
+  // --- SHUTTLE REQUESTS ---
+  createShuttleRequest: async (data) =>
+    request("/shuttle-request/request", {
+      method: "POST",
+      body: data,
+    }),
+
+  getShuttleStatus: async () => request("/shuttle-request/status"),
+
+  cancelRequest: async (id) =>
+    request(`/shuttle-request/${id}/cancel`, { method: "PATCH" }),
+
+  // --- TRIPS ---
+  createTrip: async (data) =>
+    request("/trips", {
+      method: "POST",
+      body: data,
+    }),
+
+  getPassengerTrips: async () => request("/trips"),
+
+  getTripById: async (tripId) => request(`/trips/${tripId}`),
+
+  // --- DRIVER ---
+  getDriverTrips: async () => request("/driver/trips"),
+
+  getDriverTripById: async (tripId) => request(`/driver/trips/${tripId}`),
+
+  updateStopStatus: async ({ tripId, requestId, status }) =>
+    request(`/driver/trips/${tripId}/stop/${requestId}`, {
+      method: "PATCH",
+      body: { status },
+    }),
 };

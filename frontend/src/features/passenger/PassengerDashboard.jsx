@@ -38,7 +38,7 @@ const PassengerDashboard = () => {
         return;
       }
       try {
-        const res = await apiClient.getShuttleStatus(tokens.accessToken);
+        const res = await apiClient.getShuttleStatus();
         setActiveTrip(res.data?.currentRequest || null);
 
         const history = res.data?.history || [];
@@ -50,13 +50,15 @@ const PassengerDashboard = () => {
         );
         if (recent) setLastTrip(recent);
       } catch (error) {
-        if (error?.message?.includes("401")) {
+        // Use error.status from the updated apiClient
+        if (error.status === 401 || error.message?.includes("401")) {
           Swal.fire({
             icon: "warning",
             title: "Phiên đăng nhập hết hạn",
             text: "Vui lòng đăng nhập lại.",
           });
           localStorage.removeItem("currentUser");
+          localStorage.removeItem("authTokens");
           navigate("/passenger/login");
         }
       } finally {
@@ -123,7 +125,7 @@ const PassengerDashboard = () => {
         <div>
           <p className="text-gray-500 text-sm font-medium mb-1">{greeting},</p>
           <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">
-            {user.name} 👋
+            {user.fullName || user.name} 👋
           </h1>
         </div>
 
@@ -150,7 +152,7 @@ const PassengerDashboard = () => {
                   Tài khoản
                 </p>
                 <p className="text-sm font-bold text-gray-800 truncate">
-                  {user.name}
+                  {user.fullName || user.name}
                 </p>
               </div>
 
@@ -322,13 +324,12 @@ const PassengerDashboard = () => {
             title="Bấm để đặt lại chuyến này"
           >
             <div
-              className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-xl ${
-                lastTrip.status === "completed"
-                  ? "bg-green-100 text-green-600"
-                  : lastTrip.status === "cancelled"
-                    ? "bg-red-100 text-red-500"
-                    : "bg-blue-100 text-blue-600"
-              }`}
+              className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-xl ${lastTrip.status === "completed"
+                ? "bg-green-100 text-green-600"
+                : lastTrip.status === "cancelled"
+                  ? "bg-red-100 text-red-500"
+                  : "bg-blue-100 text-blue-600"
+                }`}
             >
               {lastTrip.status === "completed"
                 ? "✔"

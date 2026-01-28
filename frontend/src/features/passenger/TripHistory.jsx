@@ -20,7 +20,7 @@ const TripHistory = () => {
         return;
       }
       try {
-        const res = await apiClient.getShuttleStatus(tokens.accessToken);
+        const res = await apiClient.getShuttleStatus();
         setTrips(res.data?.history || []);
       } catch (error) {
         if (error?.message?.includes("401")) {
@@ -75,12 +75,9 @@ const TripHistory = () => {
         setCancelModal({ show: false, tripId: null });
         return;
       }
-      await apiClient.cancelRequest({
-        id: cancelModal.tripId,
-        token: tokens.accessToken,
-      });
+      await apiClient.cancelRequest(cancelModal.tripId);
       setCancelModal({ show: false, tripId: null });
-      const res = await apiClient.getShuttleStatus(tokens.accessToken);
+      const res = await apiClient.getShuttleStatus();
       setTrips(res.data?.history || []);
     } catch (error) {
       setCancelModal({ show: false, tripId: null });

@@ -191,7 +191,6 @@ const PassengerBooking = () => {
 
       await apiClient.verifyTicket({
         ticketCode: ticketForm.tripCode,
-        token: tokens.accessToken,
       });
 
       // 👇 THÔNG BÁO XỊN: Toast góc phải
@@ -254,7 +253,6 @@ const PassengerBooking = () => {
         dropoffLocation: destination?.address || "",
         direction: isGoingToStation ? "HOME_TO_STATION" : "STATION_TO_HOME",
         timeSlot,
-        token: tokens.accessToken,
       });
 
       Swal.fire({
