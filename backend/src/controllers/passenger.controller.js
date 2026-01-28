@@ -1,26 +1,38 @@
 const Passenger = require("../models/passenger.model");
 
-// Verify ticket (Generic check)
+// Verify ticket (Mock logic: Check 6 digits)
 exports.verifyTicket = async (req, res, next) => {
     try {
         const { ticketCode } = req.body;
 
+        // 1. Kiểm tra xem người dùng có gửi mã vé lên không
         if (!ticketCode) {
-            return res.status(400).json({ message: "Ticket code is required" });
+            return res.status(400).json({ message: "Vui lòng nhập mã vé" });
         }
 
-        // Mock verification logic
-        // In a real system, you'd check this against the Intercity Bus database
-        const isValid = ticketCode.length >= 5;
+        // 2. Logic giả định: Mã vé hợp lệ là chuỗi gồm đúng 6 chữ số
+        // Regex /^\d{6}$/ : Bắt đầu và kết thúc phải là số, độ dài đúng 6
+        const isValid = /^\d{6}$/.test(ticketCode);
 
         if (!isValid) {
-            return res.status(400).json({ message: "Invalid or expired ticket code" });
+            return res.status(400).json({ 
+                message: "Mã vé không hợp lệ (Vui lòng nhập đúng 6 chữ số)" 
+            });
         }
 
+        // 3. Trả về thành công nếu đúng định dạng
         res.status(200).json({
             status: "success",
-            message: "Ticket is valid",
-            data: { ticketCode }
+            message: "Xác thực vé thành công",
+            data: { 
+                ticketCode,
+                // Giả lập thông tin vé trả về (nếu cần hiển thị)
+                details: {
+                    busOperator: "Phương Trang",
+                    seat: "A01",
+                    route: "BX Miền Tây - Cần Thơ"
+                }
+            }
         });
     } catch (error) {
         next(error);
@@ -31,7 +43,7 @@ exports.getProfile = async (req, res, next) => {
     try {
         let passenger = await Passenger.findOne({ userId: req.user.id });
 
-        // Auto-create passenger profile if missing (first login before any request)
+        // Auto-create passenger profile if missing
         if (!passenger) {
             passenger = await Passenger.create({
                 userId: req.user.id,
@@ -53,7 +65,7 @@ exports.updateProfile = async (req, res, next) => {
     try {
         const { name, phone } = req.body;
 
-        // Upsert passenger profile to avoid 404 on first update
+        // Upsert passenger profile
         const passenger = await Passenger.findOneAndUpdate(
             { userId: req.user.id },
             { name, phone },
