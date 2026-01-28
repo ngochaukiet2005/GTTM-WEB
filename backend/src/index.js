@@ -9,6 +9,7 @@ const connectDB = require('./configs/database');
 const errorHandler = require("./middlewares/errorHandle.middleware");
 const Route = require("./routes/index.route");
 const socketService = require("./services/socketService"); // 3. Import socket service
+const seedAdmin = require("./services/seedService"); // Import seed service
 
 const app = express();
 const server = http.createServer(app); // 4. Tạo HTTP server bọc lấy app Express
@@ -33,6 +34,9 @@ socketService.init(io);
     try {
         // connect database
         await connectDB();
+
+        // seed initial data
+        await seedAdmin();
 
         // init routes
         app.use("/api", Route);
