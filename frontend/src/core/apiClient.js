@@ -131,17 +131,18 @@ export const apiClient = {
       body: { ticketCode },
     }),
 
-  // --- SHUTTLE REQUESTS ---
+  // --- SHUTTLE REQUESTS (ĐÃ SỬA) ---
+  // Sửa từ /shuttle-request/... thành /tickets/... để khớp với backend
   createShuttleRequest: async (data) =>
-    request("/shuttle-request/request", {
+    request("/tickets/request", {
       method: "POST",
       body: data,
     }),
 
-  getShuttleStatus: async () => request("/shuttle-request/status"),
+  getShuttleStatus: async () => request("/tickets/status"),
 
   cancelRequest: async (id) =>
-    request(`/shuttle-request/${id}/cancel`, { method: "PATCH" }),
+    request(`/tickets/${id}/cancel`, { method: "PATCH" }),
 
   // --- TRIPS ---
   createTrip: async (data) =>
