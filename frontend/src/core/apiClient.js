@@ -1,3 +1,5 @@
+// frontend/src/core/apiClient.js
+
 // Lightweight fetch-based API client
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -131,8 +133,8 @@ export const apiClient = {
       body: { ticketCode },
     }),
 
-  // --- SHUTTLE REQUESTS (ĐÃ SỬA) ---
-  // Sửa từ /shuttle-request/... thành /tickets/... để khớp với backend
+  // --- SHUTTLE REQUESTS (ĐÃ SỬA URL) ---
+  // Lưu ý: Đã đổi từ /shuttle-request/... thành /tickets/... để khớp với backend
   createShuttleRequest: async (data) =>
     request("/tickets/request", {
       method: "POST",
@@ -155,7 +157,7 @@ export const apiClient = {
 
   getTripById: async (tripId) => request(`/trips/${tripId}`),
 
-  // --- DRIVER ---
+  // --- DRIVER APP ---
   getDriverTrips: async () => request("/driver/trips"),
 
   getDriverTripById: async (tripId) => request(`/driver/trips/${tripId}`),
@@ -166,6 +168,22 @@ export const apiClient = {
       body: { status },
     }),
 
-  // --- TIMESLOTS (MỚI) ---
+  // --- ADMIN MANAGEMENT (MỚI THÊM) ---
+  // Các hàm này dùng cho trang AdminDrivers.jsx
+  getAllDrivers: async () => request("/driver/admin/all"),
+
+  createDriver: async (driverData) => 
+    request("/driver/admin/create", {
+        method: "POST",
+        body: driverData
+    }),
+
+  toggleDriverStatus: async (id) => 
+    request(`/driver/admin/${id}/toggle`, { method: "PATCH" }),
+
+  deleteDriver: async (id) => 
+    request(`/driver/admin/${id}`, { method: "DELETE" }),
+
+  // --- TIMESLOTS ---
   getTimeSlots: async () => request("/timeslots"),
 };
