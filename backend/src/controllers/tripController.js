@@ -1,20 +1,26 @@
-const FirebaseService = require('../services/firebaseService');
+// backend/src/controllers/tripController.js
+
+const SocketService = require('../services/socketService'); // <-- Đổi thành SocketService
 const RoutingService = require('../services/routingService');
 const Trip = require('../models/trip.model');
 const Driver = require('../models/driver.model');
 const ShuttleRequest = require('../models/shuttleRequest.model');
 
 // 1. Create an optimized trip from a collection of bookings (Admin/Dispatch action)
-exports.createTrip = async (req, res) => {
+exports.createTrip = async (req, res, next) => {
   try {
     const { bookings, startTime, vehicleId, driverId } = req.body;
 
     const destinations = bookings.map(b => b.location); // Các điểm đón trả
     const station = { lat: 10.7423, lng: 106.6138 }; // Nhà xe
 
+    // Gọi Routing Service để tối ưu lộ trình
     const optimizedData = await RoutingService.optimizeTrip(station, destinations);
+    
+    // Lấy thứ tự index đã tối ưu
     const orderIndices = optimizedData.routes[0].optimizedIntermediateWaypointIndex;
 
+    // Sắp xếp lại danh sách booking theo lộ trình tối ưu
     const formattedRoute = orderIndices.map((originalIndex, i) => {
       const booking = bookings[originalIndex];
       return {
@@ -26,6 +32,7 @@ exports.createTrip = async (req, res) => {
       };
     });
 
+    // Lưu vào MongoDB
     const newTrip = await Trip.create({
       vehicleId,
       driverId,
@@ -34,11 +41,15 @@ exports.createTrip = async (req, res) => {
       status: 'ready'
     });
 
-    // Sync to Firebase
-    await FirebaseService.initializeTrip(newTrip._id, driverId, vehicleId, formattedRoute);
+    // Với Socket.IO, ta không cần "khởi tạo" node như Firebase.
+    // Nếu muốn thông báo cho tài xế ngay lập tức, có thể emit sự kiện tại đây.
+    // Ví dụ: 
+    // const io = req.app.get('socketio');
+    // io.emit(`driver_new_trip_${driverId}`, newTrip);
 
     res.status(201).json({ status: "success", data: newTrip });
   } catch (error) {
+    // Chuyển lỗi sang middleware xử lý lỗi
     res.status(500).json({ status: "error", message: error.message });
   }
 };
@@ -63,11 +74,12 @@ exports.updateStopStatus = async (req, res, next) => {
     const trip = await Trip.findById(tripId);
     if (!trip) return res.status(404).json({ message: "Trip not found" });
 
+    // Tìm điểm dừng trong mảng route
     const stopIndex = trip.route.findIndex(item => item.requestId.toString() === requestId);
     if (stopIndex === -1) return res.status(404).json({ message: "Stop not found in this trip" });
 
-    const stop = trip.route[stopIndex];
-    stop.status = status;
+    // Cập nhật trạng thái trong MongoDB
+    trip.route[stopIndex].status = status;
 
     // Map internal stop status to Request status
     const requestStatusMap = {
@@ -82,18 +94,32 @@ exports.updateStopStatus = async (req, res, next) => {
       });
     }
 
-    // Sync to Firebase
-    await FirebaseService.updateWaypointStatus(tripId, stopIndex, status);
+    // --- SOCKET IO UPDATE ---
+    // Lấy instance io từ app
+    const io = req.app.get('socketio');
+    
+    // Bắn sự kiện cập nhật trạng thái điểm dừng
+    if (io) {
+        SocketService.emitWaypointStatus(io, tripId, stopIndex, status);
+    }
 
-    // Auto-complete trip if all stops done
+    // Kiểm tra xem chuyến đi đã hoàn thành hết chưa
     const allDone = trip.route.every(s => ["dropped_off", "no_show"].includes(s.status));
+    
     if (allDone) {
       trip.status = "completed";
       await Driver.findByIdAndUpdate(trip.driverId, { status: "active" });
-      await FirebaseService.updateTripStatus(tripId, "completed");
+      
+      // --- SOCKET IO UPDATE: Hoàn thành chuyến ---
+      if (io) {
+          SocketService.emitTripStatus(io, tripId, "completed");
+      }
     } else {
       trip.status = "running";
-      await FirebaseService.updateTripStatus(tripId, "running");
+      // --- SOCKET IO UPDATE: Chuyến đang chạy ---
+      if (io) {
+          SocketService.emitTripStatus(io, tripId, "running");
+      }
     }
 
     await trip.save();
@@ -103,13 +129,12 @@ exports.updateStopStatus = async (req, res, next) => {
   }
 };
 
-
 exports.getAllTrips = async (req, res, next) => {
   try {
     let query = {};
 
     // If user is a driver, only show their trips
-    if (req.user.role === 'DRIVER') {
+    if (req.user && req.user.role === 'DRIVER') {
       const driver = await Driver.findOne({ userId: req.user.id });
       if (!driver) return res.status(404).json({ message: "Driver profile not found" });
       query.driverId = driver._id;

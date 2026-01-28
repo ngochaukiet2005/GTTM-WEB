@@ -2,7 +2,7 @@ const axios = require('axios');
 const ShuttleRequest = require('../models/shuttleRequest.model');
 const Trip = require('../models/trip.model');
 const Driver = require('../models/driver.model');
-const FirebaseService = require('./firebaseService');
+const FirebaseService = require('./socketService');
 const env = require('../configs/env');
 
 const API_KEY = env.googleMapsApiKey;
