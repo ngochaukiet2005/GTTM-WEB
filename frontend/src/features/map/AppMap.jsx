@@ -1,7 +1,12 @@
+// frontend/src/features/map/AppMap.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+
+// --- SOCKET IMPORT (Thay thế Firebase) ---
+import { io } from "socket.io-client";
 
 // --- 1. CẤU HÌNH ICON ---
 
@@ -11,6 +16,15 @@ const userDotIcon = L.divIcon({
     iconSize: [20, 20],           
     iconAnchor: [10, 10],         
     popupAnchor: [0, -10]         
+});
+
+// Icon Xe Bus/Tài xế
+const driverIcon = L.divIcon({
+    html: `<div style="font-size: 24px; filter: drop-shadow(2px 4px 6px black);">🚌</div>`,
+    className: 'driver-marker',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15]
 });
 
 // Icon Ghim
@@ -44,7 +58,6 @@ const MapController = ({ center, userPos, isTracking, onDragStart }) => {
 
     useEffect(() => {
         // Ưu tiên 1: Bay đến điểm chọn (CHỈ KHI CÓ LAT/LNG HỢP LỆ)
-        // Đây là chỗ fix lỗi crash: Kiểm tra kỹ lat, lng trước khi flyTo
         if (center && typeof center.lat === 'number' && typeof center.lng === 'number' && !isTracking) {
              map.flyTo([center.lat, center.lng], 16, { animate: true, duration: 1.0 });
              return;
@@ -70,16 +83,21 @@ const MapController = ({ center, userPos, isTracking, onDragStart }) => {
 const AppMap = ({ 
     stationLocation,    
     selectedLocation,   
-    onLocationSelect    
+    onLocationSelect,
+    driverId // ID tài xế để theo dõi
 }) => {
     const [currentPos, setCurrentPos] = useState(null); 
+    const [driverPos, setDriverPos] = useState(null); 
     const [isTracking, setIsTracking] = useState(true); 
     const watchIdRef = useRef(null);
     
+    // Ref giữ kết nối socket
+    const socketRef = useRef(null);
+
     // Mặc định hiển thị Bến xe Miền Tây nếu chưa có vị trí
     const defaultCenter = [10.742336, 106.613876]; 
 
-    // --- LOGIC GPS TỐI ƯU ---
+    // --- LOGIC GPS USER ---
     useEffect(() => {
         if (!navigator.geolocation) {
             console.error("Trình duyệt không hỗ trợ GPS");
@@ -87,7 +105,7 @@ const AppMap = ({
         }
 
         const geoOptions = { 
-            enableHighAccuracy: true, // Bắt buộc dùng chip GPS để chính xác nhất
+            enableHighAccuracy: true,
             timeout: 10000,           
             maximumAge: 0             
         };
@@ -107,6 +125,35 @@ const AppMap = ({
             if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
         };
     }, []);
+
+    // --- LOGIC TRACKING TÀI XẾ (SOCKET.IO) ---
+    useEffect(() => {
+        if (!driverId) {
+            setDriverPos(null);
+            return;
+        }
+
+        // 1. Kết nối đến Server Socket (Backend đang chạy port 5000)
+        // Lưu ý: Cấu hình URL này nên đưa vào biến môi trường trong thực tế
+        socketRef.current = io("http://localhost:5000");
+
+        // 2. Lắng nghe sự kiện cập nhật vị trí
+        const eventName = `driver_location_${driverId}`;
+        
+        socketRef.current.on(eventName, (data) => {
+            // console.log("⚡ Socket Update:", data);
+            if (data && data.lat && data.lng) {
+                setDriverPos({ lat: data.lat, lng: data.lng });
+            }
+        });
+
+        // 3. Cleanup khi component unmount hoặc đổi tài xế
+        return () => {
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+            }
+        };
+    }, [driverId]);
 
     // Tự động tắt tracking khi người dùng chọn một điểm khác trên map
     useEffect(() => {
@@ -153,7 +200,7 @@ const AppMap = ({
                     onDragStart={() => setIsTracking(false)} 
                 />
 
-                {/* 1. ĐIỂM CỐ ĐỊNH (Ví dụ: Bến xe hoặc Điểm đón của Tài xế) */}
+                {/* 1. ĐIỂM CỐ ĐỊNH (Bến xe) */}
                 {stationLocation && stationLocation.lat && (
                     <Marker position={[stationLocation.lat, stationLocation.lng]} icon={stationIcon}>
                         <Popup><b>🏁 {stationLocation.address || "Điểm mốc"}</b></Popup>
@@ -178,7 +225,19 @@ const AppMap = ({
                     </>
                 )}
 
-                {/* 3. ĐIỂM ĐÃ CHỌN (Điểm đến của Khách hoặc Điểm trả của Tài xế) */}
+                {/* 3. VỊ TRÍ TÀI XẾ (REALTIME SOCKET) */}
+                {driverPos && (
+                    <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon} zIndexOffset={900}>
+                        <Popup>
+                            <div className="text-center">
+                                <b>Tài xế đang đến!</b><br/>
+                                <span className="text-xs text-gray-500">Đang di chuyển...</span>
+                            </div>
+                        </Popup>
+                    </Marker>
+                )}
+
+                {/* 4. ĐIỂM ĐÃ CHỌN */}
                 {selectedLocation && selectedLocation.lat && (
                     <Marker position={[selectedLocation.lat, selectedLocation.lng]} icon={selectedIcon}>
                         <Popup>{selectedLocation.address}</Popup>
