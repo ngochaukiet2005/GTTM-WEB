@@ -29,10 +29,17 @@ exports.verifyTicket = async (req, res, next) => {
 
 exports.getProfile = async (req, res, next) => {
     try {
-        const passenger = await Passenger.findOne({ userId: req.user.id });
+        let passenger = await Passenger.findOne({ userId: req.user.id });
+
+        // Auto-create passenger profile if missing (first login before any request)
         if (!passenger) {
-            return res.status(404).json({ message: "Passenger profile not found" });
+            passenger = await Passenger.create({
+                userId: req.user.id,
+                name: req.user.fullName,
+                phone: req.user.numberPhone,
+            });
         }
+
         res.status(200).json({
             status: "success",
             data: { passenger }
@@ -45,15 +52,13 @@ exports.getProfile = async (req, res, next) => {
 exports.updateProfile = async (req, res, next) => {
     try {
         const { name, phone } = req.body;
+
+        // Upsert passenger profile to avoid 404 on first update
         const passenger = await Passenger.findOneAndUpdate(
             { userId: req.user.id },
             { name, phone },
-            { new: true, runValidators: true }
+            { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
         );
-
-        if (!passenger) {
-            return res.status(404).json({ message: "Passenger profile not found" });
-        }
 
         res.status(200).json({
             status: "success",
