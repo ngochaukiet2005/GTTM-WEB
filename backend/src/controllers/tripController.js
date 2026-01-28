@@ -142,6 +142,7 @@ exports.getAllTrips = async (req, res, next) => {
     // Populate sâu để lấy thông tin hành khách hiển thị lên UI Driver
     const trips = await Trip.find(query)
       .sort({ timeSlot: 1 })
+      .populate('driverId') // 🔥 Thêm dòng này để lấy thông tin tài xế
       .populate({
         path: 'route.requestId',
         populate: { path: 'passengerId', select: 'name phone' } // Lấy tên & sđt khách
