@@ -37,7 +37,6 @@ const buildHeaders = (token, extra = {}) => {
 const handleResponse = async (res) => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // If unauthorized, we might want to clear tokens, but let's keep it simple for now
     const message = data?.message || data?.error || `HTTP ${res.status}`;
     const error = new Error(message);
     error.status = res.status;
@@ -165,4 +164,7 @@ export const apiClient = {
       method: "PATCH",
       body: { status },
     }),
+
+  // --- TIMESLOTS (MỚI) ---
+  getTimeSlots: async () => request("/timeslots"),
 };
