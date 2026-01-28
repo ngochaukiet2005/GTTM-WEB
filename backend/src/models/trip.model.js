@@ -40,6 +40,9 @@ const tripSchema = new mongoose.Schema(
                     enum: ["pickup", "dropoff"],
                     required: true
                 },
+                // 🔥 Thêm tọa độ để Frontend không cần geocode lại
+                lat: { type: Number },
+                lng: { type: Number },
                 order: {
                     type: Number,
                     required: true
