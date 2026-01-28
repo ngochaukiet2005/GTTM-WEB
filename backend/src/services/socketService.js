@@ -1,31 +1,38 @@
-// Service này giúp Controller gọi Socket.io dễ dàng hơn
+let io = null;
 
-const SocketService = {
-  // Lấy instance IO từ app (cần truyền req.app.get('socketio') vào hàm này)
-  
-  // CN-TX-04: Cập nhật tọa độ tài xế
-  // Thay vì lưu vào Firebase, ta bắn sự kiện socket
-  emitDriverLocation: (io, driverId, lat, lng) => {
-    // Kênh: driver_location_{driverId}
-    io.emit(`driver_location_${driverId}`, {
-        lat, 
-        lng,
-        updatedAt: Date.now()
+const init = (ioInstance) => {
+    io = ioInstance;
+    
+    io.on("connection", (socket) => {
+        console.log(`✅ User connected: ${socket.id}`);
+
+        // Tài xế join vào room riêng của mình bằng ID (để gửi thông báo riêng cho tài xế đó)
+        socket.on("join_driver_room", (driverId) => {
+            if (driverId) {
+                socket.join(`driver_${driverId}`);
+                console.log(`🚗 Driver ${driverId} joined room: driver_${driverId}`);
+            }
+        });
+
+        socket.on("disconnect", () => {
+            console.log("❌ User disconnected");
+        });
     });
-  },
-
-  // Cập nhật trạng thái chuyến đi
-  emitTripStatus: (io, tripId, status) => {
-    io.emit(`trip_status_${tripId}`, { status });
-  },
-
-  // Cập nhật trạng thái điểm dừng
-  emitWaypointStatus: (io, tripId, waypointIndex, status) => {
-    io.emit(`trip_waypoint_${tripId}`, { 
-        index: waypointIndex, 
-        status 
-    });
-  }
 };
 
-module.exports = SocketService;
+const getIO = () => {
+    if (!io) {
+        throw new Error("Socket.io not initialized!");
+    }
+    return io;
+};
+
+// Hàm tiện ích để gửi thông báo đến 1 tài xế cụ thể
+const notifyDriver = (driverId, event, data) => {
+    if (io) {
+        io.to(`driver_${driverId}`).emit(event, data);
+        console.log(`📢 Emitted [${event}] to driver_${driverId}`);
+    }
+};
+
+module.exports = { init, getIO, notifyDriver };

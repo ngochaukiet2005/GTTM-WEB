@@ -3,7 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { apiClient } from '../../core/apiClient'; // Dùng API thật
+// Import socket.io-client
+import { io } from "socket.io-client";
+import { apiClient, getStoredTokens, clearTokens } from '../../core/apiClient';
 
 const DriverHome = () => {
   const navigate = useNavigate();
@@ -12,25 +14,9 @@ const DriverHome = () => {
   const [isOnline, setIsOnline] = useState(true);
   const [expandedSlots, setExpandedSlots] = useState([]); 
   const hasAutoExpanded = useRef(false);
+  const socketRef = useRef(null); // Ref để giữ kết nối socket
 
-  useEffect(() => {
-    // Lấy thông tin tài xế từ Token hoặc API Profile
-    const fetchProfile = async () => {
-        try {
-            // Giả sử lấy profile từ user context hoặc gọi API getProfile
-            // Ở đây tạm thời lấy tên từ localStorage hoặc gọi API me
-            // const res = await apiClient.getProfile(); 
-            // setDriver(res.data);
-            setDriver({ name: "Tài xế" }); // Placeholder nếu chưa có API profile driver riêng
-        } catch (e) { console.error(e); }
-    };
-    fetchProfile();
-
-    fetchBookings();
-    const interval = setInterval(fetchBookings, 10000); // 10s refresh
-    return () => clearInterval(interval);
-  }, []);
-
+  // Hàm fetchBookings được đưa lên trên để useEffect có thể gọi
   const fetchBookings = async () => {
     try {
         const res = await apiClient.getDriverTrips();
@@ -41,12 +27,12 @@ const DriverHome = () => {
                 // Tạo key giờ: Ví dụ "08:00"
                 const date = new Date(trip.timeSlot);
                 const timeKey = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-                const slotKey = `${timeKey}`; // Có thể thêm ngày nếu cần
+                const slotKey = `${timeKey}`; 
 
-                // Map route items thành format booking của UI cũ
+                // Map route items
                 const bookings = trip.route.map(stop => ({
-                    id: stop._id, // ID của điểm dừng
-                    tripId: trip._id, // ID chuyến đi (quan trọng)
+                    id: stop._id, 
+                    tripId: trip._id, 
                     requestId: stop.requestId?._id,
                     passenger: {
                         name: stop.requestId?.passengerId?.name || "Khách hàng",
@@ -73,14 +59,92 @@ const DriverHome = () => {
         }
     } catch (error) {
         console.error("Lỗi tải lịch trình:", error);
+        
+        // Xử lý lỗi 401 (Token hết hạn)
+        if (error.status === 401) {
+            clearTokens(); 
+            Swal.fire({
+                icon: 'error',
+                title: 'Phiên đăng nhập hết hạn',
+                text: 'Vui lòng đăng nhập lại để tiếp tục.',
+                confirmButtonText: 'Đăng nhập lại'
+            }).then(() => {
+                navigate('/driver/login');
+            });
+        }
     }
   };
 
-  // Logic bắt đầu chuyến đi: Lưu tripId thay vì timeSlot
+  // --- KIỂM TRA ĐĂNG NHẬP & KẾT NỐI SOCKET ---
+  useEffect(() => {
+    // 1. Kiểm tra Token
+    const tokens = getStoredTokens();
+    if (!tokens || !tokens.accessToken) {
+        navigate('/driver/login'); 
+        return;
+    }
+
+    // 2. Lấy thông tin tài xế (Giả lập)
+    const fetchProfile = async () => {
+        try {
+            setDriver({ name: tokens.user?.fullName || "Tài xế" }); 
+        } catch (e) { console.error(e); }
+    };
+    fetchProfile();
+
+    // 3. Setup Socket.io
+    const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    // Cắt bỏ phần /api nếu có để lấy root url cho socket
+    const socketUrl = backendUrl.endsWith('/api') ? backendUrl.replace('/api', '') : backendUrl;
+    
+    socketRef.current = io(socketUrl);
+
+    socketRef.current.on("connect", () => {
+        console.log("🔌 Socket connected:", socketRef.current.id);
+        
+        // Gửi sự kiện để tham gia room riêng của tài xế
+        // Cần đảm bảo tokens.user có id hoặc _id
+        const userId = tokens.user?.id || tokens.user?._id;
+        if (userId) {
+            socketRef.current.emit("join_driver_room", userId);
+        }
+    });
+
+    // Lắng nghe sự kiện có chuyến mới từ Server
+    socketRef.current.on("NEW_TRIP", (data) => {
+        console.log("🔔 Nhận thông báo chuyến mới:", data);
+        
+        Swal.fire({
+            title: 'Chuyến mới! 🚀',
+            text: data.message || 'Bạn vừa được phân công một chuyến đi mới.',
+            icon: 'success',
+            timer: 4000,
+            showConfirmButton: false,
+            position: 'top-end',
+            toast: true
+        });
+
+        // Tải lại danh sách ngay lập tức
+        fetchBookings();
+    });
+
+    // 4. Gọi dữ liệu lần đầu
+    fetchBookings();
+
+    // 5. Setup interval refresh (Dự phòng trường hợp socket miss)
+    const interval = setInterval(fetchBookings, 15000); 
+
+    // Cleanup
+    return () => {
+        if (socketRef.current) socketRef.current.disconnect();
+        clearInterval(interval);
+    };
+  }, [navigate]);
+
   const handleStartTrip = (timeSlot, bookings) => {
       if (!bookings || bookings.length === 0) return;
       
-      const tripId = bookings[0].tripId; // Lấy tripId từ booking đầu tiên trong slot
+      const tripId = bookings[0].tripId; 
 
       const currentTrip = localStorage.getItem('DRIVER_ACTIVE_TRIP');
       if (currentTrip) {
@@ -91,7 +155,6 @@ const DriverHome = () => {
           }
       }
 
-      // Lưu trạng thái
       localStorage.setItem('DRIVER_ACTIVE_TRIP', JSON.stringify({
           tripId: tripId,
           timeSlot: timeSlot,
@@ -113,7 +176,7 @@ const DriverHome = () => {
            <div className="max-w-5xl mx-auto flex justify-between items-end">
                <div>
                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">chúc bạn lái xe an toàn</p>
-                   <h1 className="text-3xl font-black text-slate-900 tracking-tight">Xin chào, Tài xế! 👋</h1>
+                   <h1 className="text-3xl font-black text-slate-900 tracking-tight">Xin chào, {driver.name}! 👋</h1>
                </div>
                
                <button 
@@ -137,13 +200,9 @@ const DriverHome = () => {
 
            <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-slate-200">
               {Object.entries(slots).sort().map(([timeSlot, bookings]) => {
-                  // Logic hiển thị đơn giản hóa: Admin đã xếp -> Coi như accepted
                   const acceptedCount = bookings.length; 
-                  const capacity = 16;
-                  const percent = (acceptedCount / capacity) * 100;
-                  const isFull = acceptedCount >= capacity;
-                  const isExpanded = expandedSlots.includes(timeSlot);
                   const isActive = acceptedCount > 0;
+                  const isExpanded = expandedSlots.includes(timeSlot);
 
                   return (
                       <div key={timeSlot} className="relative flex items-start group z-10">
@@ -161,7 +220,6 @@ const DriverHome = () => {
                                           <p className="text-sm text-slate-500 font-medium mt-1">{acceptedCount} hành khách</p>
                                       </div>
                                   </div>
-
                                   <div className="flex items-center gap-6 flex-1 justify-end">
                                       <div className={`w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center transition-all group-hover:bg-slate-100 ${isExpanded ? 'rotate-180 bg-green-50 text-green-600' : 'text-slate-400'}`}>
                                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">

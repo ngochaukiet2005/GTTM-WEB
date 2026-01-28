@@ -1,5 +1,7 @@
 const ShuttleRequest = require("../models/shuttleRequest.model");
 const Passenger = require("../models/passenger.model");
+const mongoose = require("mongoose"); 
+const dispatchService = require("../services/dispatch.service"); // <--- [MỚI] Import Service
 
 exports.createRequest = async (req, res, next) => {
     try {
@@ -8,8 +10,8 @@ exports.createRequest = async (req, res, next) => {
             pickupLocation,
             dropoffLocation,
             direction,
-            timeSlot, // Frontend gửi lên dạng chuỗi: "02:00 - 03:00"
-            tripDate  // Frontend gửi thêm ngày: "2026-01-30"
+            timeSlot, 
+            tripDate 
         } = req.body;
 
         const userId = req.user.id;
@@ -21,42 +23,33 @@ exports.createRequest = async (req, res, next) => {
             });
         }
 
-        // --- BẮT ĐẦU SỬA LỖI 500 TẠI ĐÂY ---
-        // Mục tiêu: Chuyển chuỗi "02:00 - 03:00" thành đối tượng Date hợp lệ
+        // --- XỬ LÝ NGÀY GIỜ ---
         let finalTimeSlotDate;
         try {
-            // Lấy giờ bắt đầu (ví dụ "02:00")
-            const startTimeStr = timeSlot.split(" - ")[0].trim(); // "02:00"
-            
-            // Nếu có ngày đi (tripDate), ghép lại thành chuỗi ISO: "2026-01-30T02:00:00"
+            const startTimeStr = timeSlot.split(" - ")[0].trim(); 
             if (tripDate) {
                 finalTimeSlotDate = new Date(`${tripDate}T${startTimeStr}:00`);
             } else {
-                // Nếu không có ngày, dùng ngày hiện tại làm mặc định
                 const now = new Date();
                 const [hours, minutes] = startTimeStr.split(':');
                 finalTimeSlotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
             }
 
-            // Kiểm tra lại xem Date có hợp lệ không
-            if (isNaN(finalTimeSlotDate.getTime())) {
-                throw new Error("Invalid Date generated");
-            }
+            if (isNaN(finalTimeSlotDate.getTime())) throw new Error("Invalid Date generated");
         } catch (err) {
             console.error("Lỗi xử lý thời gian:", err);
             return res.status(400).json({ 
                 message: "Định dạng thời gian không hợp lệ. Vui lòng thử lại." 
             });
         }
-        // --- KẾT THÚC SỬA LỖI ---
 
         // 2. Ensure passenger exists
         let passenger = await Passenger.findOne({ userId });
         if (!passenger) {
             passenger = await Passenger.create({
                 userId,
-                name: req.user.fullName,
-                phone: req.user.numberPhone
+                name: req.user.fullName || "User", 
+                phone: req.user.numberPhone || req.user.phone || "" 
             });
         }
 
@@ -67,20 +60,23 @@ exports.createRequest = async (req, res, next) => {
             pickupLocation,
             dropoffLocation,
             direction,
-            timeSlot: finalTimeSlotDate, // Lưu Date object chuẩn thay vì chuỗi
+            timeSlot: finalTimeSlotDate,
             status: "waiting"
         });
+
+        // --- [MỚI] GỌI AUTO DISPATCH CHO DEMO ---
+        // Không dùng await để tránh khách phải chờ lâu, cho chạy ngầm
+        dispatchService.autoDispatch(shuttleRequest._id);
 
         res.status(201).json({
             status: "success",
             data: shuttleRequest
         });
     } catch (error) {
-        console.error("Create Request Error:", error); // Log lỗi ra terminal để dễ debug
+        console.error("Create Request Error:", error);
         next(error);
     }
 };
-
 
 exports.getRequestStatus = async (req, res, next) => {
     try {
@@ -88,7 +84,14 @@ exports.getRequestStatus = async (req, res, next) => {
 
         const passenger = await Passenger.findOne({ userId });
         if (!passenger) {
-            return res.status(404).json({ message: "Passenger not found" });
+            return res.status(200).json({
+                status: "success",
+                data: {
+                    passengerName: req.user.fullName || "Khách",
+                    currentRequest: null,
+                    history: []
+                }
+            });
         }
 
         const requests = await ShuttleRequest
@@ -102,9 +105,9 @@ exports.getRequestStatus = async (req, res, next) => {
 
             if (reqItem.tripId) {
                 const trip = reqItem.tripId;
-                const stop = trip.route.find(
-                    r => r.requestId.toString() === reqItem._id.toString()
-                );
+                const stop = trip.route ? trip.route.find(
+                    r => r.requestId && r.requestId.toString() === reqItem._id.toString()
+                ) : null;
 
                 tripInfo = {
                     tripStatus: trip.status,
@@ -114,7 +117,6 @@ exports.getRequestStatus = async (req, res, next) => {
                 };
             }
 
-            // Format lại timeSlot khi trả về Frontend để hiển thị đẹp (HH:mm)
             const d = new Date(reqItem.timeSlot);
             const timeString = !isNaN(d.getTime()) 
                 ? `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}` 
@@ -127,7 +129,7 @@ exports.getRequestStatus = async (req, res, next) => {
                 direction: reqItem.direction,
                 pickupLocation: reqItem.pickupLocation,
                 dropoffLocation: reqItem.dropoffLocation,
-                timeSlot: timeString, // Trả về chuỗi giờ dễ đọc
+                timeSlot: timeString,
                 fullTime: reqItem.timeSlot,
                 tripInfo
             };
@@ -144,41 +146,53 @@ exports.getRequestStatus = async (req, res, next) => {
             }
         });
     } catch (error) {
+        console.error("Get Status Error:", error);
         next(error);
     }
 };
 
-// Cancel a request
 exports.cancelRequest = async (req, res, next) => {
     try {
         const { id } = req.params;
+
+        console.log(`[Cancel Request] User ${req.user.id} attempting to cancel request ${id}`);
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            console.warn(`[Cancel Request] Invalid Request ID: ${id}`);
+            return res.status(400).json({ message: "ID yêu cầu không hợp lệ" });
+        }
+
         const request = await ShuttleRequest.findById(id);
+        if (!request) {
+            console.warn(`[Cancel Request] Request not found: ${id}`);
+            return res.status(404).json({ message: "Không tìm thấy yêu cầu đặt chuyến" });
+        }
 
-        if (!request) return res.status(404).json({ message: "Request not found" });
-
-        // Security: Ensure the request belongs to the user
         const passenger = await Passenger.findOne({ userId: req.user.id });
+        
         if (!passenger || request.passengerId.toString() !== passenger._id.toString()) {
-            return res.status(403).json({ message: "You don't have permission to cancel this request" });
+            console.warn(`[Cancel Request] Permission denied. Owner: ${request.passengerId}, Requester: ${passenger?._id}`);
+            return res.status(403).json({ message: "Bạn không có quyền hủy chuyến đi này" });
         }
 
         if (request.status !== "waiting") {
-            return res.status(400).json({ message: "Cannot cancel a request that is already assigned or running" });
+            return res.status(400).json({ message: "Chuyến đã được tài xế nhận hoặc đang chạy, không thể hủy." });
         }
 
         request.status = "cancelled";
         await request.save();
 
+        console.log(`[Cancel Request] Success: ${id}`);
         res.status(200).json({
             status: "success",
-            message: "Request cancelled successfully"
+            message: "Hủy đặt chuyến thành công"
         });
     } catch (error) {
+        console.error("[Cancel Request] Internal Error:", error);
         next(error);
     }
 };
 
-// Admin: Get all pending requests
 exports.getAllPendingRequests = async (req, res, next) => {
     try {
         const requests = await ShuttleRequest.find({ status: "waiting" })

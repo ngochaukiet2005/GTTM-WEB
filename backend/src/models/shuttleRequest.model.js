@@ -31,7 +31,8 @@ const shuttleRequestSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["waiting", "assigned", "running", "completed", "no_show"],
+            // Đã thêm "cancelled" vào danh sách bên dưới
+            enum: ["waiting", "assigned", "running", "completed", "no_show", "cancelled"],
             default: "waiting"
         },
         tripId: {
