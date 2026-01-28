@@ -1,26 +1,23 @@
 // backend/src/controllers/tripController.js
 
-const SocketService = require('../services/socketService'); // <-- Đổi thành SocketService
+const SocketService = require('../services/socketService');
 const RoutingService = require('../services/routingService');
 const Trip = require('../models/trip.model');
 const Driver = require('../models/driver.model');
 const ShuttleRequest = require('../models/shuttleRequest.model');
 
-// 1. Create an optimized trip from a collection of bookings (Admin/Dispatch action)
+// 1. Create Trip (Admin)
 exports.createTrip = async (req, res, next) => {
   try {
     const { bookings, startTime, vehicleId, driverId } = req.body;
 
-    const destinations = bookings.map(b => b.location); // Các điểm đón trả
-    const station = { lat: 10.7423, lng: 106.6138 }; // Nhà xe
+    const destinations = bookings.map(b => b.location);
+    const station = { lat: 10.7423, lng: 106.6138 };
 
-    // Gọi Routing Service để tối ưu lộ trình
+    // Tối ưu lộ trình
     const optimizedData = await RoutingService.optimizeTrip(station, destinations);
-    
-    // Lấy thứ tự index đã tối ưu
     const orderIndices = optimizedData.routes[0].optimizedIntermediateWaypointIndex;
 
-    // Sắp xếp lại danh sách booking theo lộ trình tối ưu
     const formattedRoute = orderIndices.map((originalIndex, i) => {
       const booking = bookings[originalIndex];
       return {
@@ -32,7 +29,6 @@ exports.createTrip = async (req, res, next) => {
       };
     });
 
-    // Lưu vào MongoDB
     const newTrip = await Trip.create({
       vehicleId,
       driverId,
@@ -41,24 +37,22 @@ exports.createTrip = async (req, res, next) => {
       status: 'ready'
     });
 
-    // Với Socket.IO, ta không cần "khởi tạo" node như Firebase.
-    // Nếu muốn thông báo cho tài xế ngay lập tức, có thể emit sự kiện tại đây.
-    // Ví dụ: 
-    // const io = req.app.get('socketio');
-    // io.emit(`driver_new_trip_${driverId}`, newTrip);
+    // Thông báo cho tài xế qua Socket
+    const io = req.app.get('socketio');
+    if (io) {
+        io.emit(`driver_new_trip_${driverId}`, newTrip);
+    }
 
     res.status(201).json({ status: "success", data: newTrip });
   } catch (error) {
-    // Chuyển lỗi sang middleware xử lý lỗi
     res.status(500).json({ status: "error", message: error.message });
   }
 };
 
-// 2. Dispatch Engine: Legacy/Semi-auto dispatch
+// 2. Dispatch Engine
 exports.dispatchTrips = async (req, res, next) => {
   try {
     const { timeSlot, cutoffMinutes } = req.body;
-    // This utilizes the standard processDispatch logic in RoutingService
     const result = await RoutingService.processDispatch(timeSlot, cutoffMinutes);
     res.status(201).json({ status: "success", data: result });
   } catch (error) {
@@ -66,7 +60,7 @@ exports.dispatchTrips = async (req, res, next) => {
   }
 };
 
-// 3. Update stop status by Driver
+// 3. Update Stop Status (Driver Action)
 exports.updateStopStatus = async (req, res, next) => {
   try {
     const { tripId, requestId, status } = req.body; // status: picked_up, dropped_off, no_show
@@ -74,14 +68,13 @@ exports.updateStopStatus = async (req, res, next) => {
     const trip = await Trip.findById(tripId);
     if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    // Tìm điểm dừng trong mảng route
     const stopIndex = trip.route.findIndex(item => item.requestId.toString() === requestId);
-    if (stopIndex === -1) return res.status(404).json({ message: "Stop not found in this trip" });
+    if (stopIndex === -1) return res.status(404).json({ message: "Stop not found" });
 
-    // Cập nhật trạng thái trong MongoDB
+    // Update Trip Route Status
     trip.route[stopIndex].status = status;
 
-    // Map internal stop status to Request status
+    // Map status -> ShuttleRequest Status
     const requestStatusMap = {
       "picked_up": "running",
       "dropped_off": "completed",
@@ -95,31 +88,22 @@ exports.updateStopStatus = async (req, res, next) => {
     }
 
     // --- SOCKET IO UPDATE ---
-    // Lấy instance io từ app
     const io = req.app.get('socketio');
-    
-    // Bắn sự kiện cập nhật trạng thái điểm dừng
     if (io) {
+        // Gửi sự kiện cập nhật trạng thái điểm dừng
         SocketService.emitWaypointStatus(io, tripId, stopIndex, status);
     }
 
-    // Kiểm tra xem chuyến đi đã hoàn thành hết chưa
-    const allDone = trip.route.every(s => ["dropped_off", "no_show"].includes(s.status));
+    // Check if trip completed
+    const allDone = trip.route.every(s => ["dropped_off", "no_show", "completed"].includes(s.status));
     
     if (allDone) {
       trip.status = "completed";
       await Driver.findByIdAndUpdate(trip.driverId, { status: "active" });
-      
-      // --- SOCKET IO UPDATE: Hoàn thành chuyến ---
-      if (io) {
-          SocketService.emitTripStatus(io, tripId, "completed");
-      }
+      if (io) SocketService.emitTripStatus(io, tripId, "completed");
     } else {
       trip.status = "running";
-      // --- SOCKET IO UPDATE: Chuyến đang chạy ---
-      if (io) {
-          SocketService.emitTripStatus(io, tripId, "running");
-      }
+      if (io) SocketService.emitTripStatus(io, tripId, "running");
     }
 
     await trip.save();
@@ -129,27 +113,41 @@ exports.updateStopStatus = async (req, res, next) => {
   }
 };
 
+// 4. Get All Trips (Updated populate)
 exports.getAllTrips = async (req, res, next) => {
   try {
     let query = {};
 
-    // If user is a driver, only show their trips
     if (req.user && req.user.role === 'DRIVER') {
       const driver = await Driver.findOne({ userId: req.user.id });
       if (!driver) return res.status(404).json({ message: "Driver profile not found" });
       query.driverId = driver._id;
     }
 
-    const trips = await Trip.find(query).sort({ createdAt: -1 });
+    // Populate sâu để lấy thông tin hành khách hiển thị lên UI Driver
+    const trips = await Trip.find(query)
+        .sort({ timeSlot: 1 })
+        .populate({
+            path: 'route.requestId',
+            populate: { path: 'passengerId', select: 'name phone' } // Lấy tên & sđt khách
+        });
+
     res.status(200).json({ status: "success", results: trips.length, data: { trips } });
   } catch (error) {
     next(error);
   }
 };
 
+// 5. Get Trip By ID
 exports.getTripById = async (req, res, next) => {
   try {
-    const trip = await Trip.findById(req.params.id).populate('driverId', 'fullName numberPhone').populate('route.requestId');
+    const trip = await Trip.findById(req.params.id)
+        .populate('driverId', 'fullName numberPhone')
+        .populate({
+            path: 'route.requestId',
+            populate: { path: 'passengerId', select: 'name phone' }
+        });
+
     if (!trip) return res.status(404).json({ message: "Trip not found" });
     res.status(200).json({ status: "success", data: { trip } });
   } catch (error) {

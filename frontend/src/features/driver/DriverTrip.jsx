@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppMap from '../map/AppMap';
 import Swal from 'sweetalert2';
-import { mockDriverService } from '../../core/services/mockApiDriver';
+import { apiClient } from '../../core/apiClient'; // Dùng API thật
 
 const DriverTrip = () => {
     const navigate = useNavigate();
@@ -15,116 +15,139 @@ const DriverTrip = () => {
     const [driverPos, setDriverPos] = useState(null); 
     const [loading, setLoading] = useState(true);
 
-    // 2. LOGIC LOAD DỮ LIỆU
+    // 2. LOGIC LOAD DỮ LIỆU TỪ REAL API
     useEffect(() => {
-        const checkAndLoadTrip = async () => {
+        const loadTrip = async () => {
             const storedTrip = JSON.parse(localStorage.getItem('DRIVER_ACTIVE_TRIP'));
 
-            if (!storedTrip || !storedTrip.timeSlot) {
+            if (!storedTrip || !storedTrip.tripId) {
                 await Swal.fire({
                     icon: 'warning',
-                    title: 'Chưa có chuyến đi!',
-                    text: 'Vui lòng chọn chuyến từ Bảng điều khiển để bắt đầu.',
-                    confirmButtonText: 'Về trang chủ',
+                    title: 'Chưa chọn chuyến!',
+                    text: 'Vui lòng chọn chuyến từ Bảng điều khiển.',
+                    confirmButtonText: 'Quay lại',
                     allowOutsideClick: false
                 });
                 navigate('/driver/home');
                 return;
             }
 
-            if (storedTrip.fullRouteData) {
-                setTripData(storedTrip.fullRouteData);
-                setCurrentStageIndex(storedTrip.stageIndex || 0);
-                
-                const idx = storedTrip.stageIndex || 0;
-                if (idx > 0) {
-                    const prev = storedTrip.fullRouteData.route[idx - 1];
-                    setDriverPos({ lat: prev.lat, lng: prev.lng });
-                } else {
-                    setDriverPos(storedTrip.fullRouteData.station);
-                }
-                setLoading(false);
-                return;
-            }
-
             try {
-                const data = await mockDriverService.startOptimizedTrip(storedTrip.timeSlot);
-                setTripData(data);
-                setCurrentStageIndex(0);
-                setDriverPos(data.station);
+                // Gọi API lấy chi tiết chuyến đi
+                const res = await apiClient.getDriverTripById(storedTrip.tripId);
+                const trip = res.data.trip;
 
-                localStorage.setItem('DRIVER_ACTIVE_TRIP', JSON.stringify({
-                    timeSlot: storedTrip.timeSlot,
-                    stageIndex: 0,
-                    fullRouteData: data 
-                }));
+                setTripData(trip);
+                
+                // Khôi phục vị trí chặng (nếu có lưu, hoặc tìm chặng pending đầu tiên)
+                let savedIndex = storedTrip.stageIndex || 0;
+                
+                // Nếu muốn thông minh hơn: Tìm chặng đầu tiên chưa hoàn thành
+                const pendingIndex = trip.route.findIndex(r => r.status === 'pending');
+                if (pendingIndex !== -1) savedIndex = pendingIndex;
+
+                setCurrentStageIndex(savedIndex);
+
+                // Set vị trí ban đầu cho Map
+                const currentStop = trip.route[savedIndex];
+                // Lưu ý: trip.route[i].location là string địa chỉ, cần lat/lng nếu có.
+                // Ở controller createTrip, ta chỉ lưu address string. 
+                // Nếu AppMap cần lat/lng, ta cần đảm bảo createTrip lưu cả lat/lng.
+                // Tạm thời giả định hệ thống map xử lý được hoặc mock lat/lng từ RoutingService.
+                // Trong code cũ createTrip: location: booking.location.address || booking.location
+                
+                // Để Map hoạt động tốt, ta lấy vị trí Bến xe nếu là chặng 0
+                if (savedIndex === 0) {
+                    setDriverPos({ lat: 10.742336, lng: 106.613876 }); // Bến xe Miền Tây
+                }
 
                 setLoading(false);
             } catch (error) {
-                Swal.fire("Lỗi", error.message, "error").then(() => navigate('/driver/home'));
+                console.error(error);
+                Swal.fire("Lỗi", "Không thể tải dữ liệu chuyến đi", "error").then(() => navigate('/driver/home'));
             }
         };
 
-        checkAndLoadTrip();
+        loadTrip();
     }, [navigate]);
 
-    // 3. XỬ LÝ HOÀN THÀNH (NÚT XANH)
-    const handleCompleteStage = () => {
+    // 3. XỬ LÝ HOÀN THÀNH ĐIỂM DỪNG
+    const handleCompleteStage = async () => {
         if (!tripData) return;
         
-        const destination = tripData.route[currentStageIndex];
+        const currentStop = tripData.route[currentStageIndex];
         const isLastStage = currentStageIndex === tripData.route.length - 1;
+        
+        // Xác định loại hành động dựa trên type của điểm dừng
+        const actionType = currentStop.type === 'pickup' ? 'Đón' : 'Trả';
+        const statusToSend = currentStop.type === 'pickup' ? 'picked_up' : 'dropped_off';
 
-        Swal.fire({
-            title: `Đã xong khách ${destination.passenger.name}?`,
-            text: isLastStage ? "Đây là khách cuối cùng." : "Chuyển sang điểm tiếp theo?",
+        const result = await Swal.fire({
+            title: `Xác nhận ${actionType} khách?`,
+            text: `Khách hàng: ${currentStop.requestId?.passengerId?.name}`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Xác nhận',
             confirmButtonColor: '#10B981'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                processNextStage(isLastStage, 'completed');
-            }
         });
+
+        if (result.isConfirmed) {
+            try {
+                // Gọi API update status
+                await apiClient.updateStopStatus({
+                    tripId: tripData._id,
+                    requestId: currentStop.requestId._id,
+                    status: statusToSend
+                });
+
+                processNextStage(isLastStage, 'completed');
+            } catch (error) {
+                Swal.fire("Lỗi", "Cập nhật trạng thái thất bại", "error");
+            }
+        }
     };
 
-    // 4. XỬ LÝ HỦY/THẤT BẠI (NÚT ĐỎ)
-    const handleFailStage = () => {
+    // 4. XỬ LÝ HỦY KHÁCH (NO SHOW)
+    const handleFailStage = async () => {
         if (!tripData) return;
         
-        const destination = tripData.route[currentStageIndex];
+        const currentStop = tripData.route[currentStageIndex];
         const isLastStage = currentStageIndex === tripData.route.length - 1;
 
-        Swal.fire({
-            title: `Khách ${destination.passenger.name} vắng mặt?`,
-            text: "Xác nhận đánh dấu THẤT BẠI cho khách này?",
+        const result = await Swal.fire({
+            title: `Khách vắng mặt?`,
+            text: "Xác nhận đánh dấu khách không đến (No-show)?",
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: 'Đúng, Hủy khách',
-            confirmButtonColor: '#EF4444',
-            cancelButtonText: 'Không'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                processNextStage(isLastStage, 'failed');
-            }
+            confirmButtonText: 'Đúng, Hủy',
+            confirmButtonColor: '#EF4444'
         });
+
+        if (result.isConfirmed) {
+            try {
+                await apiClient.updateStopStatus({
+                    tripId: tripData._id,
+                    requestId: currentStop.requestId._id,
+                    status: 'no_show'
+                });
+                processNextStage(isLastStage, 'failed');
+            } catch (error) {
+                Swal.fire("Lỗi", "Cập nhật thất bại", "error");
+            }
+        }
     };
 
-    // Hàm chung xử lý chuyển chặng
+    // Chuyển sang chặng kế tiếp
     const processNextStage = (isLastStage, status) => {
         if (isLastStage) {
             localStorage.removeItem('DRIVER_ACTIVE_TRIP');
-            const msg = status === 'completed' ? "Hoàn thành chuyến đi!" : "Kết thúc chuyến (có khách hủy).";
-            Swal.fire("Kết thúc", msg, "success")
+            Swal.fire("Tuyệt vời!", "Bạn đã hoàn thành chuyến đi.", "success")
                 .then(() => navigate('/driver/home'));
         } else {
             const newIndex = currentStageIndex + 1;
             setCurrentStageIndex(newIndex);
             
-            const destination = tripData.route[currentStageIndex]; 
-            setDriverPos({ lat: destination.lat, lng: destination.lng });
-
+            // Cập nhật storage để nếu reload vẫn giữ đúng chặng
             const currentStore = JSON.parse(localStorage.getItem('DRIVER_ACTIVE_TRIP'));
             localStorage.setItem('DRIVER_ACTIVE_TRIP', JSON.stringify({
                 ...currentStore,
@@ -137,27 +160,28 @@ const DriverTrip = () => {
     if (loading || !tripData) return (
         <div className="h-screen w-full bg-slate-100 flex items-center justify-center flex-col gap-4">
              <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-             <p className="text-slate-500 font-medium animate-pulse">Đang tải dữ liệu hành trình...</p>
+             <p className="text-slate-500 font-medium animate-pulse">Đang tải dữ liệu...</p>
         </div>
     );
 
-    const origin = currentStageIndex === 0 ? tripData.station : tripData.route[currentStageIndex - 1];
-    const destination = tripData.route[currentStageIndex];
+    const currentStop = tripData.route[currentStageIndex];
+    const passenger = currentStop.requestId?.passengerId || { name: "Khách lẻ", phone: "" };
 
     const openGoogleMaps = () => {
-        if (!origin || !destination) return;
-        const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}&travelmode=driving`;
+        // Dùng địa chỉ text để tìm đường nếu không có lat/lng chính xác
+        const destAddress = encodeURIComponent(currentStop.location);
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destAddress}&travelmode=driving`;
         window.open(url, '_blank');
     };
 
     return (
         <div className="relative h-screen w-full bg-slate-100 flex flex-col font-sans">
-            
-            {/* Map */}
+            {/* Map Area */}
             <div className="flex-1 relative z-0">
                 <AppMap 
-                    stationLocation={tripData.station} 
-                    selectedLocation={destination} 
+                    stationLocation={{ lat: 10.742336, lng: 106.613876 }} // Bến xe
+                    // Truyền điểm đến hiện tại cho Map hiển thị marker
+                    selectedLocation={{ address: currentStop.location, lat: null, lng: null }} 
                     userLocation={driverPos}
                 />
             </div>
@@ -183,28 +207,26 @@ const DriverTrip = () => {
                 
                 <div className="p-6 pt-2 pb-8">
                     <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mb-3 text-center">
-                        Điểm đến hiện tại
+                        {currentStop.type === 'pickup' ? 'Điểm đón khách' : 'Điểm trả khách'}
                     </p>
 
                     {/* Passenger Card */}
                     <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6 relative overflow-hidden">
-                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500"></div>
+                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${currentStop.type === 'pickup' ? 'bg-blue-500' : 'bg-orange-500'}`}></div>
                         <div className="relative shrink-0">
-                             <img src={destination.passenger.avatar || `https://ui-avatars.com/api/?name=${destination.passenger.name}`} className="w-14 h-14 rounded-full border-2 border-white shadow-md object-cover bg-slate-200" alt="" />
+                             <img src={`https://ui-avatars.com/api/?name=${passenger.name}&background=random`} className="w-14 h-14 rounded-full border-2 border-white shadow-md object-cover bg-slate-200" alt="" />
                         </div>
                         <div className="min-w-0 flex-1 pl-1">
-                            <h3 className="font-bold text-lg text-slate-800 truncate">{destination.passenger.name}</h3>
-                            <p className="text-sm text-slate-500 truncate font-medium">{destination.address}</p>
+                            <h3 className="font-bold text-lg text-slate-800 truncate">{passenger.name}</h3>
+                            <p className="text-sm text-slate-500 truncate font-medium">{currentStop.location}</p>
                         </div>
-                        <a href={`tel:${destination.passenger.phone}`} className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center shrink-0 hover:bg-green-600 hover:text-white transition-all shadow-sm">
+                        <a href={`tel:${passenger.phone}`} className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center shrink-0 hover:bg-green-600 hover:text-white transition-all shadow-sm">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                         </a>
                     </div>
 
-                    {/* ACTIONS BUTTONS: Grid 3 cột theo thứ tự yêu cầu */}
+                    {/* ACTIONS BUTTONS */}
                     <div className="grid grid-cols-3 gap-3">
-                        
-                        {/* 1. NÚT BẢN ĐỒ (Trái) */}
                         <button 
                             onClick={openGoogleMaps}
                             className="py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-slate-50 active:scale-95 transition-all"
@@ -213,25 +235,22 @@ const DriverTrip = () => {
                             <span className="text-[10px] font-bold uppercase">Bản đồ</span>
                         </button>
 
-                        {/* 2. NÚT HOÀN THÀNH (Giữa - Xanh) */}
                         <button 
                             onClick={handleCompleteStage}
                             className="py-4 bg-blue-600 text-white font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-lg shadow-blue-500/30 hover:bg-blue-700 active:scale-95 transition-all"
                         >
                             <span className="text-2xl">✅</span>
-                            <span className="text-[10px] font-bold uppercase">Xong khách</span>
+                            <span className="text-[10px] font-bold uppercase">Xong</span>
                         </button>
 
-                        {/* 3. NÚT HỦY KHÁCH (Phải - Đỏ) */}
                         <button 
                             onClick={handleFailStage}
                             className="py-4 bg-red-50 border border-red-100 text-red-500 font-bold rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-red-100 active:scale-95 transition-all"
                         >
                             <span className="text-2xl">🚫</span>
-                            <span className="text-[10px] font-bold uppercase">Hủy khách</span>
+                            <span className="text-[10px] font-bold uppercase">Hủy</span>
                         </button>
                     </div>
-
                 </div>
             </div>
         </div>
