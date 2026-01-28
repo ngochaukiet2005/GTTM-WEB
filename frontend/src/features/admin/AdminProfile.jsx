@@ -1,7 +1,7 @@
 // src/features/admin/AdminProfile.jsx
 import React, { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
-import { mockApiAdmin } from '../../core/services/mockApiAdmin';
+import { getStoredTokens } from '../../core/apiClient';
 
 const AdminProfile = () => {
   const [profile, setProfile] = useState({
@@ -16,7 +16,16 @@ const AdminProfile = () => {
 
   // Load dữ liệu khi vào trang
   useEffect(() => {
-    mockApiAdmin.getProfile().then(setProfile);
+    const user = getStoredTokens()?.user;
+    if (user) {
+      setProfile({
+        name: user.fullName || '',
+        email: user.email || '',
+        phone: user.numberPhone || '',
+        role: user.role || 'ADMIN',
+        avatar: user.avatar || 'https://via.placeholder.com/150'
+      });
+    }
   }, []);
 
   const handleChange = (e) => {

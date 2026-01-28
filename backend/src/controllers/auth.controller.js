@@ -43,13 +43,13 @@ exports.resetPassword = asyncHandler(async (req, res) => {
 });
 
 exports.logout = asyncHandler(async (req, res) => {
-    const result = await authService.logout(req.user.id);
+    const result = await authService.logout(req.user._id);
     res.status(200).json(result);
 });
 
 exports.changePassword = asyncHandler(async (req, res) => {
     const { oldPassword, newPassword } = req.body;
-    const result = await authService.changePassword(req.user.id, oldPassword, newPassword);
+    const result = await authService.changePassword(req.user._id, oldPassword, newPassword);
     res.status(200).json(result);
 });
 

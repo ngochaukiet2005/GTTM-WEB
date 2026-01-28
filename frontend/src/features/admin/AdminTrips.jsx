@@ -1,17 +1,29 @@
 // src/features/admin/AdminTrips.jsx
 import React, { useEffect, useState } from 'react';
-import { mockApiAdmin } from '../../core/services/mockApiAdmin';
+import { apiClient } from '../../core/apiClient';
 
 const AdminTrips = () => {
     const [trips, setTrips] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Lấy dữ liệu từ mock API
-        mockApiAdmin.getRecentTrips().then((data) => {
-            // Sắp xếp dữ liệu theo ngày giảm dần trước khi lưu vào state
-            const sortedData = data.sort((a, b) => new Date(b.date) - new Date(a.date));
-            setTrips(sortedData);
-        });
+        // Lấy dữ liệu từ API thật
+        const fetchTrips = async () => {
+            try {
+                setLoading(true);
+                const data = await apiClient.getPassengerTrips();
+                // Sắp xếp dữ liệu theo ngày giảm dần trước khi lưu vào state
+                const sortedData = (data?.trips || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+                setTrips(sortedData);
+            } catch (err) {
+                console.error("Error fetching trips:", err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchTrips();
     }, []);
 
     // Logic tính toán trạng thái hiển thị

@@ -21,7 +21,7 @@ class AuthService {
             if (existingUser.email === email) {
                 throw new AppError("Email already registered", 400);
             }
-            throw new AppError("Phone number already registered", 400);
+            throw new AppError("Phone number already registered", 400)
         }
 
         const otp = otpUtils.generateOtp();

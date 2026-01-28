@@ -37,10 +37,14 @@ exports.createTrip = async (req, res, next) => {
       status: 'ready'
     });
 
-    // Thông báo cho tài xế qua Socket
-    const io = req.app.get('socketio');
-    if (io) {
-        io.emit(`driver_new_trip_${driverId}`, newTrip);
+    // Thông báo cho tài xế qua Socket (Dùng chuẩn userId room)
+    const driver = await Driver.findById(driverId);
+    if (driver) {
+      SocketService.notifyDriver(driver.userId.toString(), "NEW_TRIP", {
+        tripId: newTrip._id,
+        message: "Bạn có chuyến xe mới!",
+        data: newTrip
+      });
     }
 
     res.status(201).json({ status: "success", data: newTrip });
@@ -90,13 +94,13 @@ exports.updateStopStatus = async (req, res, next) => {
     // --- SOCKET IO UPDATE ---
     const io = req.app.get('socketio');
     if (io) {
-        // Gửi sự kiện cập nhật trạng thái điểm dừng
-        SocketService.emitWaypointStatus(io, tripId, stopIndex, status);
+      // Gửi sự kiện cập nhật trạng thái điểm dừng
+      SocketService.emitWaypointStatus(io, tripId, stopIndex, status);
     }
 
     // Check if trip completed
     const allDone = trip.route.every(s => ["dropped_off", "no_show", "completed"].includes(s.status));
-    
+
     if (allDone) {
       trip.status = "completed";
       await Driver.findByIdAndUpdate(trip.driverId, { status: "active" });
@@ -118,21 +122,28 @@ exports.getAllTrips = async (req, res, next) => {
   try {
     let query = {};
 
+    // Nếu là DRIVER, lấy trips của driver đó
     if (req.user && req.user.role === 'DRIVER') {
-      const driver = await Driver.findOne({ userId: req.user.id });
-      if (!driver) return res.status(404).json({ message: "Driver profile not found" });
+      // Tìm driver record dựa trên userId
+      const driver = await Driver.findOne({ userId: req.user._id });
+      if (!driver) {
+        return res.status(404).json({ message: "Driver profile not found" });
+      }
       query.driverId = driver._id;
     }
 
     // Populate sâu để lấy thông tin hành khách hiển thị lên UI Driver
     const trips = await Trip.find(query)
-        .sort({ timeSlot: 1 })
-        .populate({
-            path: 'route.requestId',
-            populate: { path: 'passengerId', select: 'name phone' } // Lấy tên & sđt khách
-        });
+      .sort({ timeSlot: 1 })
+      .populate({
+        path: 'route.requestId',
+        populate: { path: 'passengerId', select: 'name phone' } // Lấy tên & sđt khách
+      });
 
-    res.status(200).json({ status: "success", results: trips.length, data: { trips } });
+    res.status(200).json({
+      status: "success",
+      data: { trips }
+    });
   } catch (error) {
     next(error);
   }
@@ -142,11 +153,11 @@ exports.getAllTrips = async (req, res, next) => {
 exports.getTripById = async (req, res, next) => {
   try {
     const trip = await Trip.findById(req.params.id)
-        .populate('driverId', 'fullName numberPhone')
-        .populate({
-            path: 'route.requestId',
-            populate: { path: 'passengerId', select: 'name phone' }
-        });
+      .populate('driverId', 'fullName numberPhone')
+      .populate({
+        path: 'route.requestId',
+        populate: { path: 'passengerId', select: 'name phone' }
+      });
 
     if (!trip) return res.status(404).json({ message: "Trip not found" });
     res.status(200).json({ status: "success", data: { trip } });

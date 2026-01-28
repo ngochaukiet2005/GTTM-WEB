@@ -1,6 +1,6 @@
 const ShuttleRequest = require("../models/shuttleRequest.model");
 const Passenger = require("../models/passenger.model");
-const mongoose = require("mongoose"); 
+const mongoose = require("mongoose");
 const dispatchService = require("../services/dispatch.service"); // <--- [MỚI] Import Service
 
 exports.createRequest = async (req, res, next) => {
@@ -10,11 +10,11 @@ exports.createRequest = async (req, res, next) => {
             pickupLocation,
             dropoffLocation,
             direction,
-            timeSlot, 
-            tripDate 
+            timeSlot,
+            tripDate
         } = req.body;
 
-        const userId = req.user.id;
+        const userId = req.user._id; // ✅ Sửa: _id thay vì id
 
         // 1. Validate input
         if (!ticketCode || !pickupLocation || !dropoffLocation || !direction || !timeSlot) {
@@ -26,7 +26,7 @@ exports.createRequest = async (req, res, next) => {
         // --- XỬ LÝ NGÀY GIỜ ---
         let finalTimeSlotDate;
         try {
-            const startTimeStr = timeSlot.split(" - ")[0].trim(); 
+            const startTimeStr = timeSlot.split(" - ")[0].trim();
             if (tripDate) {
                 finalTimeSlotDate = new Date(`${tripDate}T${startTimeStr}:00`);
             } else {
@@ -38,8 +38,8 @@ exports.createRequest = async (req, res, next) => {
             if (isNaN(finalTimeSlotDate.getTime())) throw new Error("Invalid Date generated");
         } catch (err) {
             console.error("Lỗi xử lý thời gian:", err);
-            return res.status(400).json({ 
-                message: "Định dạng thời gian không hợp lệ. Vui lòng thử lại." 
+            return res.status(400).json({
+                message: "Định dạng thời gian không hợp lệ. Vui lòng thử lại."
             });
         }
 
@@ -48,8 +48,8 @@ exports.createRequest = async (req, res, next) => {
         if (!passenger) {
             passenger = await Passenger.create({
                 userId,
-                name: req.user.fullName || "User", 
-                phone: req.user.numberPhone || req.user.phone || "" 
+                name: req.user.fullName || "User",
+                phone: req.user.numberPhone || req.user.phone || ""
             });
         }
 
@@ -64,9 +64,15 @@ exports.createRequest = async (req, res, next) => {
             status: "waiting"
         });
 
-        // --- [MỚI] GỌI AUTO DISPATCH CHO DEMO ---
-        // Không dùng await để tránh khách phải chờ lâu, cho chạy ngầm
-        dispatchService.autoDispatch(shuttleRequest._id);
+        // --- [MỚI] GỌI AUTO DISPATCH ---
+        // Await để đảm bảo logic chạy xong hoặc bắt được lỗi
+        try {
+            console.log(`[Controller] Khởi chạy autoDispatch cho request: ${shuttleRequest._id}`);
+            await dispatchService.autoDispatch(shuttleRequest._id);
+        } catch (dispatchError) {
+            console.error("❌ [Controller] Lỗi khi Dispatch:", dispatchError);
+            // Vẫn trả về 201 vì request đã được lưu, nhưng log lỗi để debug
+        }
 
         res.status(201).json({
             status: "success",
@@ -80,7 +86,7 @@ exports.createRequest = async (req, res, next) => {
 
 exports.getRequestStatus = async (req, res, next) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user._id; // ✅ Sửa: _id thay vì id
 
         const passenger = await Passenger.findOne({ userId });
         if (!passenger) {
@@ -118,8 +124,8 @@ exports.getRequestStatus = async (req, res, next) => {
             }
 
             const d = new Date(reqItem.timeSlot);
-            const timeString = !isNaN(d.getTime()) 
-                ? `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}` 
+            const timeString = !isNaN(d.getTime())
+                ? `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
                 : "N/A";
 
             return {
@@ -155,7 +161,7 @@ exports.cancelRequest = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        console.log(`[Cancel Request] User ${req.user.id} attempting to cancel request ${id}`);
+        console.log(`[Cancel Request] User ${req.user._id} attempting to cancel request ${id}`);
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             console.warn(`[Cancel Request] Invalid Request ID: ${id}`);
@@ -168,8 +174,8 @@ exports.cancelRequest = async (req, res, next) => {
             return res.status(404).json({ message: "Không tìm thấy yêu cầu đặt chuyến" });
         }
 
-        const passenger = await Passenger.findOne({ userId: req.user.id });
-        
+        const passenger = await Passenger.findOne({ userId: req.user._id });
+
         if (!passenger || request.passengerId.toString() !== passenger._id.toString()) {
             console.warn(`[Cancel Request] Permission denied. Owner: ${request.passengerId}, Requester: ${passenger?._id}`);
             return res.status(403).json({ message: "Bạn không có quyền hủy chuyến đi này" });

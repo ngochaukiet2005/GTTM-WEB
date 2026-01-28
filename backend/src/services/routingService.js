@@ -133,7 +133,16 @@ const RoutingService = {
         );
 
         await Driver.findByIdAndUpdate(driver._id, { status: 'on_trip' });
-        await FirebaseService.initializeTrip(newTrip._id, driver._id, driver.vehicleId, route);
+
+        // Notify driver via Socket
+        FirebaseService.notifyDriver(driver.userId.toString(), "NEW_TRIP", {
+          tripId: newTrip._id,
+          message: "Bạn có chuyến xe mới từ Dispatch Engine!",
+          tripInfo: {
+            time: startTime,
+            stops: route.length
+          }
+        });
 
         tripsCreated.push(newTrip);
       }

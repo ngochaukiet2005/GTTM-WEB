@@ -41,12 +41,12 @@ exports.verifyTicket = async (req, res, next) => {
 
 exports.getProfile = async (req, res, next) => {
     try {
-        let passenger = await Passenger.findOne({ userId: req.user.id });
+        let passenger = await Passenger.findOne({ userId: req.user._id });
 
         // Auto-create passenger profile if missing
         if (!passenger) {
             passenger = await Passenger.create({
-                userId: req.user.id,
+                userId: req.user._id,
                 name: req.user.fullName,
                 phone: req.user.numberPhone,
             });
@@ -67,7 +67,7 @@ exports.updateProfile = async (req, res, next) => {
 
         // Upsert passenger profile
         const passenger = await Passenger.findOneAndUpdate(
-            { userId: req.user.id },
+            { userId: req.user._id },
             { name, phone },
             { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
         );

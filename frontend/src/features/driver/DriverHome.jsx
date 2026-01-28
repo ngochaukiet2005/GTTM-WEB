@@ -20,10 +20,13 @@ const DriverHome = () => {
   const fetchBookings = async () => {
     try {
         const res = await apiClient.getDriverTrips();
-        if (res.data && res.data.trips) {
+        // Backend trả về { status, data: { trips } }
+        const trips = res?.data?.trips || [];
+        
+        if (trips.length > 0) {
             const groupedSlots = {};
             
-            res.data.trips.forEach(trip => {
+            trips.forEach(trip => {
                 // Tạo key giờ: Ví dụ "08:00"
                 const date = new Date(trip.timeSlot);
                 const timeKey = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });

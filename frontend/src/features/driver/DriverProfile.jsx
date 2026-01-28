@@ -1,7 +1,7 @@
 // src/features/driver/DriverProfile.jsx
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import { mockDriverService } from '../../core/services/mockApiDriver';
+import { apiClient, getStoredTokens } from '../../core/apiClient';
 
 const DriverProfile = () => {
   const [loading, setLoading] = useState(true);
@@ -40,18 +40,20 @@ const DriverProfile = () => {
 
   const loadProfile = async () => {
     try {
-      const data = await mockDriverService.getDriverProfile();
-      setFormData({
-        name: data.name,
-        phone: data.phone,
-        email: data.email,
-        plate: data.plate,
-        stationStart: data.stationStart || STATIONS[0], 
-        stationEnd: data.stationEnd || DESTINATIONS[0],
-        gender: data.gender || 'male'
-      });
-      setAvatar(data.avatar);
-      setRating(data.rating);
+      const user = getStoredTokens()?.user;
+      if (user) {
+        setFormData({
+          name: user.fullName || '',
+          phone: user.numberPhone || '',
+          email: user.email || '',
+          plate: user.vehiclePlate || '',
+          stationStart: user.stationStart || STATIONS[0], 
+          stationEnd: user.stationEnd || DESTINATIONS[0],
+          gender: user.gender?.toLowerCase() || 'male'
+        });
+        setAvatar(user.avatar || 'https://via.placeholder.com/150');
+        setRating(user.rating || 0);
+      }
     } catch (error) {
       console.error(error);
     } finally {

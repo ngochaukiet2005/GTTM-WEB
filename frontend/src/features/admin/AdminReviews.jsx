@@ -1,12 +1,54 @@
 // src/features/admin/AdminReviews.jsx
 import React, { useEffect, useState } from 'react';
-import { mockApiAdmin } from '../../core/services/mockApiAdmin';
+import { apiClient } from '../../core/apiClient';
 
 const AdminReviews = () => {
   const [reviewGroups, setReviewGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    mockApiAdmin.getAllReviews().then(setReviewGroups);
+    const fetchReviews = async () => {
+      try {
+        setLoading(true);
+        const data = await apiClient.getPassengerTrips();
+        // Parse reviews from trips with ratings
+        const reviews = (data?.trips || [])
+          .filter(trip => trip.rating)
+          .map(trip => ({
+            id: trip._id,
+            driver: trip.driverName || 'N/A',
+            plate: trip.vehiclePlate || 'N/A',
+            route: trip.route || 'N/A',
+            rating: trip.rating,
+            comment: trip.feedback || 'Không có bình luận',
+            time: trip.completedAt?.split('T')[1]?.slice(0, 5) || '00:00',
+            date: trip.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0]
+          }));
+        
+        // Group by date
+        const grouped = {};
+        reviews.forEach(review => {
+          if (!grouped[review.date]) {
+            grouped[review.date] = [];
+          }
+          grouped[review.date].push(review);
+        });
+        
+        const groupedArray = Object.entries(grouped).map(([date, items]) => ({
+          id: date,
+          date,
+          items
+        }));
+        
+        setReviewGroups(groupedArray);
+      } catch (err) {
+        console.error("Error fetching reviews:", err);
+        setReviewGroups([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchReviews();
   }, []);
 
   return (

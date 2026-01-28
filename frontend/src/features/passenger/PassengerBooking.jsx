@@ -1,5 +1,4 @@
 // src/features/passenger/PassengerBooking.jsx
-
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AppMap from "../map/AppMap";
@@ -20,6 +19,11 @@ const BUS_STATIONS = [
   "Bến xe Mỹ Tho",
 ];
 
+const DEFAULT_SLOTS = Array.from({ length: 24 }, (_, i) => ({
+  time: `${i.toString().padStart(2, "0")}:00 - ${((i + 1) % 24).toString().padStart(2, "0")}:00`,
+  _id: `default-${i}`
+}));
+
 const PassengerBooking = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,7 +32,6 @@ const PassengerBooking = () => {
   const [isGoingToStation, setIsGoingToStation] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   const [locating, setLocating] = useState(false);
-
   const [isVerified, setIsVerified] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
@@ -39,109 +42,54 @@ const PassengerBooking = () => {
     phone: "",
     tripDate: "",
     departTime: "",
-    pickup: BUS_STATIONS[0],
-    destination: BUS_STATIONS[1],
+    pickupLocation: "",
+    dropoffLocation: "",
   });
 
-  const [bookingTime, setBookingTime] = useState("");
-  // State lưu danh sách tất cả các slot lấy từ API
-  const [allTimeSlots, setAllTimeSlots] = useState([]);
-  // State lưu danh sách slot khả dụng sau khi lọc
-  const [availableSlots, setAvailableSlots] = useState([]);
+  const [bookingTime, setBookingTime] = useState(DEFAULT_SLOTS[0].time);
+  const [allTimeSlots, setAllTimeSlots] = useState(DEFAULT_SLOTS);
+  const [availableSlots, setAvailableSlots] = useState(DEFAULT_SLOTS);
 
-  // --- 1. LẤY DANH SÁCH KHUNG GIỜ TỪ API ---
   useEffect(() => {
     const fetchSlots = async () => {
       try {
         const res = await apiClient.getTimeSlots();
-        if (res.data && res.data.slots) {
-          setAllTimeSlots(res.data.slots);
+        const slotsData = res?.data?.slots || res?.slots || [];
+        if (slotsData.length > 0) {
+          setAllTimeSlots(slotsData);
+          setAvailableSlots(slotsData);
         }
       } catch (error) {
-        console.error("Lỗi lấy khung giờ:", error);
+        console.warn("Using default slots");
       }
     };
     fetchSlots();
   }, []);
+
+  useEffect(() => {
+    if (location.state) {
+      const { pickup, destination } = location.state;
+      const isFromStation = pickup.address.includes("Bến xe Miền Tây");
+      setIsGoingToStation(!isFromStation);
+      setSelectedPoint(isFromStation ? destination : pickup);
+      setTicketForm(prev => ({
+        ...prev,
+        pickupLocation: pickup.address,
+        dropoffLocation: destination.address
+      }));
+    } else {
+      handleGetLocation();
+    }
+  }, [location]);
 
   const getAddressFromNominatim = async (lat, lng) => {
     try {
       const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
       const response = await fetch(url);
       const data = await response.json();
-      return data.display_name
-        ? data.display_name.split(",").slice(0, 3).join(",")
-        : "Vị trí đã chọn";
+      return data.display_name ? data.display_name.split(",").slice(0, 3).join(",") : "Vị trí đã chọn";
     } catch (error) {
-      console.error("Lỗi:", error);
       return "Lỗi bản đồ";
-    }
-  };
-
-  useEffect(() => {
-    if (location.state) {
-      const { pickup, destination } = location.state;
-      const isFromStation = pickup.address.includes("Bến xe Miền Tây");
-
-      if (isFromStation) {
-        setIsGoingToStation(false);
-        setSelectedPoint(destination);
-      } else {
-        setIsGoingToStation(true);
-        setSelectedPoint(pickup);
-      }
-    } else {
-      handleGetLocation();
-    }
-  }, [location]);
-
-  // --- 2. TÍNH TOÁN SLOT KHẢ DỤNG (DỰA TRÊN DỮ LIỆU API) ---
-  useEffect(() => {
-    if (isVerified && allTimeSlots.length > 0) {
-      calculateAvailableSlots();
-    }
-  }, [isVerified, allTimeSlots, ticketForm.departTime, ticketForm.tripDate]);
-
-  const calculateAvailableSlots = () => {
-    const now = new Date();
-    const currentHour = now.getHours();
-
-    if (!ticketForm.departTime) return;
-
-    // Giờ xe chạy (ví dụ "14:30" -> lấy 14)
-    const busDepartHour = parseInt(ticketForm.departTime.split(":")[0]);
-    const tripDate = new Date(ticketForm.tripDate);
-
-    const cleanNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const cleanTripDate = new Date(
-      tripDate.getFullYear(),
-      tripDate.getMonth(),
-      tripDate.getDate(),
-    );
-
-    const isToday = cleanTripDate.getTime() === cleanNow.getTime();
-
-    // Lọc danh sách khung giờ từ API
-    const validSlots = allTimeSlots.filter((slotObj) => {
-      // slotObj.time dạng "02:00 - 03:00" -> Lấy số 2 để so sánh
-      const startHour = parseInt(slotObj.time.split(':')[0]);
-
-      // 1. Khung giờ phải trước giờ xe khách chạy
-      if (startHour >= busDepartHour) return false;
-      
-      // 2. Nếu là hôm nay, khung giờ phải sau giờ hiện tại
-      if (isToday && startHour <= currentHour) return false;
-      
-      return true;
-    });
-
-    setAvailableSlots(validSlots);
-    
-    // Tự động chọn slot đầu tiên nếu có
-    if (validSlots.length > 0) {
-      setBookingTime(validSlots[0].time); // Lưu cả chuỗi "02:00 - 03:00"
-    } else {
-      setBookingTime("");
     }
   };
 
@@ -153,13 +101,16 @@ const PassengerBooking = () => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         const addressName = await getAddressFromNominatim(lat, lng);
-        setSelectedPoint({ lat, lng, address: addressName });
+        const point = { lat, lng, address: addressName };
+        setSelectedPoint(point);
+        setTicketForm(prev => ({
+          ...prev,
+          pickupLocation: isGoingToStation ? addressName : BEN_XE_MIEN_TAY.address,
+          dropoffLocation: isGoingToStation ? BEN_XE_MIEN_TAY.address : addressName
+        }));
         setLocating(false);
       },
-      (error) => {
-        console.error("Lỗi GPS:", error);
-        setLocating(false);
-      },
+      () => setLocating(false)
     );
   };
 
@@ -167,298 +118,88 @@ const PassengerBooking = () => {
     setSelectedPoint({ lat, lng, address: "Đang lấy địa chỉ..." });
     const addressName = await getAddressFromNominatim(lat, lng);
     setSelectedPoint({ lat, lng, address: addressName });
+    setTicketForm(prev => ({
+      ...prev,
+      pickupLocation: isGoingToStation ? addressName : BEN_XE_MIEN_TAY.address,
+      dropoffLocation: isGoingToStation ? BEN_XE_MIEN_TAY.address : addressName
+    }));
   };
-
-  const pickup = isGoingToStation ? selectedPoint : BEN_XE_MIEN_TAY;
-  const destination = isGoingToStation ? BEN_XE_MIEN_TAY : selectedPoint;
 
   const handleVerifyTicket = async (e) => {
     e.preventDefault();
     setVerifying(true);
     try {
-      const now = new Date();
-      const tripDateTime = new Date(
-        `${ticketForm.tripDate}T${ticketForm.departTime}`,
-      );
-
-      if (tripDateTime < now) {
-        throw new Error("Vé này đã quá hạn hoặc xe đã khởi hành!");
-      }
-
-      // Có thể bỏ qua check login ở bước này nếu muốn xác thực public
-      // nhưng ở đây giữ nguyên logic cũ của bạn
-      const tokens = getStoredTokens();
-      if (!tokens?.accessToken) {
-         // Logic nhắc đăng nhập...
-      }
-
-      await apiClient.verifyTicket({
-        ticketCode: ticketForm.tripCode,
-      });
-
-      const Toast = Swal.mixin({
+      await apiClient.verifyTicket({ ticketCode: ticketForm.tripCode });
+      Swal.fire({
         toast: true,
         position: "top-end",
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true,
-        didOpen: (toast) => {
-          toast.addEventListener("mouseenter", Swal.stopTimer);
-          toast.addEventListener("mouseleave", Swal.resumeTimer);
-        },
-      });
-
-      Toast.fire({
         icon: "success",
         title: "Xác thực vé thành công!",
+        showConfirmButton: false,
+        timer: 2000
       });
-
       setIsVerified(true);
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Xác thực thất bại",
-        text: error.message,
-        confirmButtonText: "Thử lại",
-        confirmButtonColor: "#d33",
-      });
+      Swal.fire({ icon: "error", title: "Thất bại", text: error.message });
     } finally {
       setVerifying(false);
     }
   };
 
   const handleBooking = async () => {
-    if (!selectedPoint || !bookingTime) return;
+    if (!bookingTime) return;
     setIsBooking(true);
     try {
-      const tokens = getStoredTokens();
-      if (!tokens?.accessToken) {
-        Swal.fire({
-          icon: "warning",
-          title: "Vui lòng đăng nhập",
-          text: "Bạn cần đăng nhập trước khi đặt chuyến.",
-        });
-        setIsBooking(false);
-        return;
-      }
-
-      // --- LOGIC GỬI DỮ LIỆU ĐÃ SỬA ---
-      // Nếu bookingTime là chuỗi khoảng giờ ("02:00 - 03:00"), ta gửi nguyên chuỗi
-      // Kèm theo ngày đi để backend biết
       const requestData = {
         ticketCode: ticketForm.tripCode || "DEMO-001",
-        pickupLocation: pickup?.address || "",
-        dropoffLocation: destination?.address || "",
+        pickupLocation: ticketForm.pickupLocation || (isGoingToStation ? selectedPoint?.address : BEN_XE_MIEN_TAY.address),
+        dropoffLocation: ticketForm.dropoffLocation || (isGoingToStation ? BEN_XE_MIEN_TAY.address : selectedPoint?.address),
         direction: isGoingToStation ? "HOME_TO_STATION" : "STATION_TO_HOME",
-        timeSlot: bookingTime, // Gửi chuỗi "02:00 - 03:00"
-        tripDate: ticketForm.tripDate // Gửi thêm ngày để backend xử lý
+        timeSlot: bookingTime,
+        tripDate: ticketForm.tripDate || new Date().toISOString().split('T')[0]
       };
 
       await apiClient.createShuttleRequest(requestData);
-
       Swal.fire({
         title: "Đặt xe thành công!",
-        html: `
-          <div class="text-left text-sm text-gray-600 space-y-2">
-            <p><b>Khung giờ:</b> ${bookingTime} - Ngày ${ticketForm.tripDate || "Hôm nay"}</p>
-            <p><b>Điểm đón:</b> ${pickup?.address || "N/A"}</p>
-            <p><b>Tài xế:</b> Đang điều phối...</p>
-            <p class="text-green-600 font-bold mt-2">✨ Đã gửi yêu cầu tới hệ thống!</p>
-          </div>
-        `,
         icon: "success",
-        confirmButtonText: "Xem Lịch Sử Chuyến Đi",
+        confirmButtonText: "Xem Lịch Sử",
         confirmButtonColor: "#2563eb",
-        allowOutsideClick: false,
-      }).then((result) => {
-        if (result.isConfirmed) {
-          navigate("/passenger/history");
-        }
-      });
+      }).then(() => navigate("/passenger/history"));
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Lỗi đặt xe",
-        text: error.message,
-      });
+      Swal.fire({ icon: "error", title: "Lỗi", text: error.message });
     } finally {
       setIsBooking(false);
     }
   };
 
+  const pickup = isGoingToStation ? selectedPoint : BEN_XE_MIEN_TAY;
+  const destination = isGoingToStation ? BEN_XE_MIEN_TAY : selectedPoint;
+
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-50">
       <div className="absolute inset-0 z-0">
-        <AppMap
-          userLocation={null}
-          stationLocation={BEN_XE_MIEN_TAY}
-          selectedLocation={selectedPoint}
-          isGoingToStation={isGoingToStation}
-          onLocationSelect={handleMapClick}
-        />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black/20 to-transparent pointer-events-none md:hidden" />
+        <AppMap stationLocation={BEN_XE_MIEN_TAY} selectedLocation={selectedPoint} isGoingToStation={isGoingToStation} onLocationSelect={handleMapClick} />
       </div>
 
       {!isVerified && (
         <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg animate-fade-in-down max-h-[95vh] overflow-y-auto">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-blue-700">
-                Xác Thực Vé Nhà Xe
-              </h2>
-              <p className="text-sm text-gray-500">
-                Vui lòng điền đầy đủ thông tin vé để được xác nhận.
-              </p>
-            </div>
-
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]">
+            <h2 className="text-2xl font-bold text-blue-700 text-center mb-4">Xác Thực Vé</h2>
             <form onSubmit={handleVerifyTicket} className="space-y-4">
-              {/* ... (Phần Form Input Giữ Nguyên) ... */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Mã chuyến (*)
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="VX001"
-                    className="w-full p-2 border rounded-lg uppercase"
-                    value={ticketForm.tripCode}
-                    onChange={(e) =>
-                      setTicketForm({ ...ticketForm, tripCode: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Email đặt vé (*)
-                  </label>
-                  <input
-                    required
-                    type="email"
-                    placeholder="khach@gmail.com"
-                    className="w-full p-2 border rounded-lg"
-                    value={ticketForm.email}
-                    onChange={(e) =>
-                      setTicketForm({ ...ticketForm, email: e.target.value })
-                    }
-                  />
-                </div>
+                <input required placeholder="Mã chuyến (6 số)" className="p-2 border rounded-lg" value={ticketForm.tripCode} onChange={e => setTicketForm({ ...ticketForm, tripCode: e.target.value })} />
+                <input required type="email" placeholder="Email" className="p-2 border rounded-lg" value={ticketForm.email} onChange={e => setTicketForm({ ...ticketForm, email: e.target.value })} />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Họ và tên
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    className="w-full p-2 border rounded-lg"
-                    value={ticketForm.fullName}
-                    onChange={(e) =>
-                      setTicketForm({ ...ticketForm, fullName: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Số điện thoại (*)
-                  </label>
-                  <input
-                    required
-                    type="tel"
-                    className="w-full p-2 border rounded-lg"
-                    placeholder="090..."
-                    value={ticketForm.phone}
-                    onChange={(e) =>
-                      setTicketForm({ ...ticketForm, phone: e.target.value })
-                    }
-                  />
-                </div>
+                <input required placeholder="Họ và tên" className="p-2 border rounded-lg" value={ticketForm.fullName} onChange={e => setTicketForm({ ...ticketForm, fullName: e.target.value })} />
+                <input required placeholder="Số điện thoại" className="p-2 border rounded-lg" value={ticketForm.phone} onChange={e => setTicketForm({ ...ticketForm, phone: e.target.value })} />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Ngày khởi hành (*)
-                  </label>
-                  <input
-                    required
-                    type="date"
-                    className="w-full p-2 border rounded-lg"
-                    value={ticketForm.tripDate}
-                    onChange={(e) =>
-                      setTicketForm({ ...ticketForm, tripDate: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Giờ xe chạy (*)
-                  </label>
-                  <input
-                    required
-                    type="time"
-                    className="w-full p-2 border rounded-lg"
-                    value={ticketForm.departTime}
-                    onChange={(e) =>
-                      setTicketForm({
-                        ...ticketForm,
-                        departTime: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                <input required type="date" className="p-2 border rounded-lg" value={ticketForm.tripDate} onChange={e => setTicketForm({ ...ticketForm, tripDate: e.target.value })} />
+                <input required type="time" className="p-2 border rounded-lg" value={ticketForm.departTime} onChange={e => setTicketForm({ ...ticketForm, departTime: e.target.value })} />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Điểm đón (Vé)
-                  </label>
-                  <select
-                    className="w-full p-2 border rounded-lg bg-gray-50"
-                    value={ticketForm.pickup}
-                    onChange={(e) =>
-                      setTicketForm({ ...ticketForm, pickup: e.target.value })
-                    }
-                  >
-                    {BUS_STATIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">
-                    Điểm đến (Vé)
-                  </label>
-                  <select
-                    className="w-full p-2 border rounded-lg bg-gray-50"
-                    value={ticketForm.destination}
-                    onChange={(e) =>
-                      setTicketForm({
-                        ...ticketForm,
-                        destination: e.target.value,
-                      })
-                    }
-                  >
-                    {BUS_STATIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={verifying}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-all mt-4"
-              >
+              <button type="submit" disabled={verifying} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg">
                 {verifying ? "Đang kiểm tra..." : "Xác thực ngay"}
               </button>
             </form>
@@ -467,153 +208,36 @@ const PassengerBooking = () => {
       )}
 
       {isVerified && (
-        <>
-          <div className="absolute bottom-8 right-4 md:bottom-12 md:right-12 z-20">
-            <button
-              onClick={handleGetLocation}
-              className="bg-white p-4 rounded-full shadow-xl text-gray-600 hover:text-blue-600"
-            >
-              <svg
-                className={`h-6 w-6 ${locating ? "animate-spin text-blue-600" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
+        <div className="absolute top-4 left-4 right-4 md:left-12 md:top-12 md:w-[420px] z-10">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border border-white/20">
+            <h1 className="text-xl font-extrabold text-gray-800 mb-4">GTTM <span className="text-blue-600">Shuttle</span></h1>
+
+            <div className="bg-gray-50 rounded-xl p-4 border mb-6 relative">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <p className="text-sm font-bold truncate">{pickup?.address || "Chọn điểm đón..."}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <p className="text-sm font-bold truncate">{destination?.address || "Chọn điểm trả..."}</p>
+              </div>
+              <button onClick={() => setIsGoingToStation(!isGoingToStation)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-full shadow">🔄</button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Khung giờ trung chuyển</label>
+              <select value={bookingTime} onChange={e => setBookingTime(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl font-bold">
+                {availableSlots.map(slot => (
+                  <option key={slot._id} value={slot.time}>{slot.time}</option>
+                ))}
+              </select>
+            </div>
+
+            <button onClick={handleBooking} disabled={isBooking || !selectedPoint} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg">
+              {isBooking ? "Đang xử lý..." : "Xác nhận đặt xe"}
             </button>
           </div>
-
-          <div className="absolute top-4 left-4 right-4 md:left-12 md:top-12 md:w-[420px] z-10">
-            <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border border-white/20 animate-fade-in-down">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-xl font-extrabold text-gray-800">
-                  GTTM <span className="text-blue-600">Shuttle</span>
-                </h1>
-                <div className="flex gap-2">
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200">
-                    Miễn phí
-                  </span>
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full uppercase">
-                    {isGoingToStation ? "Đến Bến" : "Rời Bến"}
-                  </span>
-                </div>
-              </div>
-
-              {/* ... (Phần hiển thị điểm đón/trả giữ nguyên) ... */}
-              <div className="relative bg-gray-50 rounded-xl p-4 border border-gray-200 shadow-inner mb-6">
-                <div className="absolute left-[29px] top-[34px] bottom-[34px] w-[2px] border-l-2 border-dashed border-gray-300 z-0 pointer-events-none"></div>
-                <div
-                  className={`relative z-10 flex items-center gap-4 mb-4 ${!pickup ? "opacity-50" : "opacity-100"}`}
-                >
-                  <div className="w-4 h-4 rounded-full border-[3px] border-blue-500 bg-white shadow-sm flex-shrink-0"></div>
-                  <div className="flex-1 min-w-0 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">
-                      Điểm đón
-                    </p>
-                    <p className="text-sm font-bold text-gray-800 truncate">
-                      {pickup ? pickup.address : "..."}
-                    </p>
-                  </div>
-                </div>
-                <div
-                  className={`relative z-10 flex items-center gap-4 ${!destination ? "opacity-50" : "opacity-100"}`}
-                >
-                  <div className="w-4 h-4 flex-shrink-0 text-red-500">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className="w-full h-full"
-                    >
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">
-                      Điểm trả
-                    </p>
-                    <p className="text-sm font-bold text-gray-800 truncate">
-                      {destination ? destination.address : "..."}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsGoingToStation(!isGoingToStation)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white p-2 rounded-full shadow-md z-20"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <div>
-                <div className="mb-4">
-                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">
-                    Khung giờ shuttle bus
-                  </label>
-
-                  {availableSlots.length > 0 ? (
-                    <select
-                      value={bookingTime}
-                      onChange={(e) => setBookingTime(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      {availableSlots.map((slot) => (
-                        <option key={slot._id || slot.time} value={slot.time}>
-                          {slot.time}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="w-full p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-bold text-center">
-                      Không còn chuyến xe nào khả dụng trước giờ xe chạy (
-                      {ticketForm.departTime})
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleBooking}
-                  disabled={
-                    !selectedPoint || isBooking || availableSlots.length === 0
-                  }
-                  className={`w-full py-4 px-6 rounded-xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-3 ${!selectedPoint || isBooking || availableSlots.length === 0 ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:shadow-blue-500/30 hover:-translate-y-1"}`}
-                >
-                  {isBooking ? "Đang xử lý..." : "Xác nhận đặt xe"}
-                </button>
-
-                {!selectedPoint && (
-                  <p className="mt-4 text-center text-xs font-medium text-gray-400 animate-pulse">
-                    👇 Chọn điểm {isGoingToStation ? "đón" : "trả"} trên bản đồ
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

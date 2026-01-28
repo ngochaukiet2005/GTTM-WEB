@@ -7,12 +7,12 @@ const socketService = require("./socketService");
 
 // --- PHẦN 1: LOGIC TÍNH KHOẢNG CÁCH (Giữ lại để dùng sau nếu cần) ---
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; 
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 // --- PHẦN 2: TÌM TÀI XẾ (Đã sửa lại dùng MongoDB thay vì Firebase) ---
@@ -30,30 +30,31 @@ const findNearestDriver = async (passengerLat, passengerLng) => {
 const autoDispatch = async (requestId) => {
     try {
         console.log(`🔄 [Dispatch] Đang xử lý yêu cầu: ${requestId}`);
-        
+
         // 1. Lấy thông tin yêu cầu
         const request = await ShuttleRequest.findById(requestId);
         if (!request) {
-            console.error("❌ [Dispatch] Không tìm thấy Request ID");
+            console.error("❌ [Dispatch] Không tìm thấy Request ID:", requestId);
             return;
         }
+        console.log(`✓ [Dispatch] Tìm thấy request:`, { pickupLocation: request.pickupLocation, dropoffLocation: request.dropoffLocation });
 
-        // 2. Tìm tài xế (Logic thông minh hơn)
-        // Ưu tiên tài xế đang active
-        let driver = await Driver.findOne({ status: 'active' }); 
-        
-        // --- SELF-HEALING: Nếu chưa có tài xế nào, tự động tạo từ User ROLE DRIVER ---
+        // 2. Tìm tài xế (Ưu tiên tài xế đang rảnh)
+        let driver = await Driver.findOne({ status: 'active' });
+
+        // --- SELF-HEALING: Nếu chưa có tài xế nào active, tìm bất kỳ tài xế nào ---
         if (!driver) {
-            console.warn("⚠️ [Dispatch] Không tìm thấy Driver Profile nào. Đang thử tạo tự động...");
-            
-            // Tìm 1 user có role DRIVER bất kỳ
+            console.warn("⚠️ [Dispatch] Không có tài xế active. Đang tìm tài xế khác...");
+            driver = await Driver.findOne({ status: { $ne: 'on_trip' } });
+        }
+
+        if (!driver) {
+            console.warn("⚠️ [Dispatch] Vẫn không tìm thấy driver profile. Đang kiểm tra User role DRIVER...");
             const userDriver = await User.findOne({ role: 'DRIVER' });
-            
+
             if (userDriver) {
-                // Kiểm tra xem user này đã có driver profile chưa
-                const existingDriver = await Driver.findOne({ userId: userDriver._id });
-                
-                if (!existingDriver) {
+                driver = await Driver.findOne({ userId: userDriver._id });
+                if (!driver) {
                     driver = await Driver.create({
                         userId: userDriver._id,
                         name: userDriver.fullName || "Tài xế Test",
@@ -62,26 +63,31 @@ const autoDispatch = async (requestId) => {
                         capacity: 16,
                         status: "active"
                     });
-                    console.log(`✅ [Dispatch] Đã tự động tạo Driver Profile cho user: ${userDriver.email}`);
+                    console.log(`✅ [Dispatch] Đã tạo Driver Profile mới cho user: ${userDriver.email}`);
                 } else {
-                    driver = existingDriver;
+                    // Nếu có profile nhưng status đang bị kẹt/inactive, reset về active
+                    driver.status = "active";
+                    await driver.save();
+                    console.log(`[Dispatch] Đã reset trạng thái cho tài xế: ${driver.name}`);
                 }
             }
         }
 
         if (!driver) {
-            console.error("❌ [Dispatch] HỆ THỐNG KHÔNG CÓ TÀI XẾ (Vui lòng tạo User có role DRIVER trước)");
+            console.error("❌ [Dispatch] HỆ THỐNG KHÔNG CÓ TÀI XẾ. Vui lòng tạo tài khoản có role DRIVER.");
             return;
         }
 
         // 3. Tạo chuyến đi mới (Trip)
+        console.log(`[Dispatch] Tạo trip cho driver:`, driver._id);
         const newTrip = await Trip.create({
             driverId: driver._id,
             timeSlot: request.timeSlot,
-            date: request.timeSlot, 
-            status: "assigned", 
+            status: "ready", // ✅ Chỉ dùng: ready, running, completed
             vehicleId: driver.vehicleId || "BUS-SOCKET-01",
-            currentLocation: "Bãi xe trung tâm",
+            // 🔥 QUAN TRỌNG: Lưu location trực tiếp ở trip để sync với passenger
+            pickupLocation: request.pickupLocation,
+            dropoffLocation: request.dropoffLocation,
             route: [
                 {
                     requestId: request._id,
@@ -101,16 +107,18 @@ const autoDispatch = async (requestId) => {
         });
 
         // 4. Cập nhật lại Request
+        console.log(`[Dispatch] Cập nhật request status sang "assigned"`);
         request.status = "assigned";
         request.tripId = newTrip._id;
         await request.save();
+        console.log(`✅ [Dispatch] Request đã update:`, { requestId: request._id, status: request.status, tripId: request.tripId });
 
         console.log(`✅ [Dispatch] Thành công! Gán cho tài xế: ${driver.name} (TripID: ${newTrip._id})`);
 
         // 5. 🔥 BẮN SOCKET
         // Frontend join room bằng USER ID ("driver_" + user.id)
         // Backend phải gửi vào room đó
-        const roomNameId = driver.userId.toString(); 
+        const roomNameId = driver.userId.toString();
 
         socketService.notifyDriver(roomNameId, "NEW_TRIP", {
             tripId: newTrip._id,

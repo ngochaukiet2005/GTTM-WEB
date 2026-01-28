@@ -15,6 +15,15 @@ const tripSchema = new mongoose.Schema(
             type: Date,
             required: true
         },
+        // 🔥 Thêm location trực tiếp để dễ query + sync với passenger
+        pickupLocation: {
+            type: String,
+            required: true
+        },
+        dropoffLocation: {
+            type: String,
+            required: true
+        },
         route: [
             {
                 requestId: {

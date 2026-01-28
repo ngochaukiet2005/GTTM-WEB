@@ -1,6 +1,6 @@
 // src/features/driver/DriverHistory.jsx
 import React, { useState, useEffect } from 'react';
-import { mockDriverService } from '../../core/services/mockApiDriver';
+import { apiClient } from '../../core/apiClient';
 
 const DriverHistory = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -14,12 +14,39 @@ const DriverHistory = () => {
 
   const fetchHistory = async () => {
     setLoading(true);
-    // Sử dụng API lấy lịch sử
-    const data = await mockDriverService.getHistoryByDate(selectedDate);
-    setSlots(data || {});
-    // Tự động mở hết các slot để nhìn cho thoáng
-    setExpandedSlots(Object.keys(data || {}));
-    setLoading(false);
+    try {
+      // Sử dụng API lấy lịch sử
+      const data = await apiClient.getDriverTrips();
+      const trips = data?.trips || [];
+      
+      // Filter by selected date and group by time slot
+      const filtered = trips.filter(trip => 
+        trip.startTime?.split('T')[0] === selectedDate
+      );
+      
+      const grouped = {};
+      filtered.forEach(trip => {
+        const timeSlot = trip.startTime?.split('T')[1]?.slice(0, 5) || '00:00';
+        if (!grouped[timeSlot]) {
+          grouped[timeSlot] = [];
+        }
+        grouped[timeSlot].push({
+          id: trip._id,
+          status: trip.status === 'completed' ? 'completed' : 'pending',
+          route: trip.route || 'N/A',
+          passengers: trip.passengerCount || 0,
+          time: timeSlot
+        });
+      });
+      
+      setSlots(grouped);
+      setExpandedSlots(Object.keys(grouped));
+    } catch (err) {
+      console.error("Error fetching history:", err);
+      setSlots({});
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleSlot = (slot) => {

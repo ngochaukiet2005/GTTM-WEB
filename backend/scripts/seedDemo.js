@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const User = require("../src/models/user.model");
+const TimeSlot = require("../src/models/timeSlot.model");
 const Driver = require("../src/models/driver.model");
 const Passenger = require("../src/models/passenger.model");
 const ShuttleRequest = require("../src/models/shuttleRequest.model");
@@ -18,6 +19,7 @@ const seed = async () => {
 
     // Clear existing data
     await User.deleteMany({});
+    await TimeSlot.deleteMany({});
     await Driver.deleteMany({});
     await Passenger.deleteMany({});
     await ShuttleRequest.deleteMany({});
@@ -37,93 +39,27 @@ const seed = async () => {
 
     console.log("✅ Created Admin account: admin@gttm.com / admin123");
 
-    // 2. Create Drivers
-    const driverUser1 = await User.create({
-      email: "driver1@example.com",
-      password: "password123",
-      fullName: "Nguyen Van Tai Xe 1",
-      numberPhone: "0901234561",
-      role: "DRIVER",
-      isVerified: true,
+    // 2. Seed TimeSlots (Khung giờ shuttle bus)
+    const startHours = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+    const slotsData = startHours.map((startHour, index) => {
+        const endHour = startHour + 1;
+        const startStr = startHour.toString().padStart(2, '0') + ":00";
+        const endStr = endHour.toString().padStart(2, '0') + ":00";
+
+        return {
+            time: `${startStr} - ${endStr}`,
+            order: index + 1,
+            isActive: true
+        };
     });
 
-    const driverUser2 = await User.create({
-      email: "driver2@example.com",
-      password: "password123",
-      fullName: "Le Van Tai Xe 2",
-      numberPhone: "0901234562",
-      role: "DRIVER",
-      isVerified: true,
-    });
+    await TimeSlot.insertMany(slotsData);
+    console.log(`✅ Created ${slotsData.length} time slots`);
 
-    await Driver.create([
-      {
-        userId: driverUser1._id,
-        name: driverUser1.fullName,
-        phone: driverUser1.numberPhone,
-        vehicleId: "VAN-001",
-        capacity: 10,
-        status: "active",
-      },
-      {
-        userId: driverUser2._id,
-        name: driverUser2.fullName,
-        phone: driverUser2.numberPhone,
-        vehicleId: "VAN-002",
-        capacity: 10,
-        status: "active",
-      },
-    ]);
-
-    // 2. Create 15 Passengers and Requests for the same TimeSlot
-    const timeSlot = new Date("2026-02-01T08:00:00Z");
-    console.log(
-      `Creating 15 passengers for timeslot: ${timeSlot.toISOString()}`,
-    );
-
-    for (let i = 1; i <= 15; i++) {
-      const user = await User.create({
-        email: `passenger${i}@example.com`,
-        password: "password123",
-        fullName: `Hanh Khach ${i}`,
-        numberPhone: `09123456${i.toString().padStart(2, "0")}`,
-        role: "USER",
-        isVerified: true,
-      });
-
-      const passenger = await Passenger.create({
-        userId: user._id,
-        name: user.fullName,
-        phone: user.numberPhone,
-      });
-
-      const ticketCode = `TIC-100${i}`;
-
-      await ShuttleRequest.create({
-        passengerId: passenger._id,
-        ticketCode: ticketCode,
-        direction: "HOME_TO_STATION",
-        pickupLocation: `Address ${i}, District ${Math.ceil(i / 5)}`,
-        dropoffLocation: "STATION",
-        timeSlot: timeSlot,
-        status: "waiting",
-        createdAt: new Date("2026-02-01T07:00:00Z"), // Set before cutoff
-      });
-    }
-
-    console.log(
-      "Successfully seeded 1 admin, 2 drivers and 15 passengers with requests.",
-    );
-    console.log("\n--- ADMIN LOGIN ---");
-    console.log("Email: admin@gttm.com");
-    console.log("Password: admin123");
-    console.log("\n--- HOW TO TEST SMART DISPATCH ---");
-    console.log("1. Login as admin or just call the dispatch API:");
-    console.log(`   POST /api/trips/dispatch`);
-    console.log(`   Body: { "timeSlot": "${timeSlot.toISOString()}" }`);
-    console.log("2. EXPECTED RESULT:");
-    console.log("   - Trip 1: 10 passengers (Full capacity of Driver 1)");
-    console.log("   - Trip 2: 5 passengers (Remaining for Driver 2)");
+    console.log("\n--- READY FOR TESTING ---");
+    console.log("Admin Email: admin@gttm.com");
+    console.log("Admin Password: admin123");
+    console.log("\nCreate your own drivers, passengers, and trips as needed.");
 
     process.exit(0);
   } catch (err) {
