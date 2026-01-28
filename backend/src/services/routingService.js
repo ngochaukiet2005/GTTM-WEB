@@ -90,30 +90,46 @@ const RoutingService = {
         if (currentRequestIndex >= requests.length) break;
 
         const capacity = driver.capacity || 16;
-        const batchRequests = requests.slice(currentRequestIndex, currentRequestIndex + capacity);
-        currentRequestIndex += capacity;
+        // 🔥 Mỗi hành khách cần 1 chỗ ngồi, KHÔNG phải 2 điểm dừng
+        // Vì xe chở hành khách, không phải đếm số điểm dừng
+        const maxPassengers = capacity;
+        const batchRequests = requests.slice(currentRequestIndex, currentRequestIndex + maxPassengers);
+        currentRequestIndex += maxPassengers;
 
-        const destinations = await Promise.all(batchRequests.map(async (req) => {
-          const addr = req.direction === "HOME_TO_STATION" ? req.pickupLocation : req.dropoffLocation;
-          const coords = await RoutingService.geocode(addr) || { lat: 10.7, lng: 106.6 }; // Fallback
-          return {
-            ...coords,
+        // 🔥 Tạo CẢ 2 điểm (pickup + dropoff) cho mỗi request
+        const allWaypoints = [];
+        for (const req of batchRequests) {
+          // Điểm đón
+          const pickupAddr = req.direction === "HOME_TO_STATION" ? req.pickupLocation : req.dropoffLocation;
+          const pickupCoords = await RoutingService.geocode(pickupAddr) || { lat: 10.7, lng: 106.6 };
+          allWaypoints.push({
+            ...pickupCoords,
             requestId: req._id,
-            address: addr,
-            type: req.direction === "HOME_TO_STATION" ? "pickup" : "dropoff"
-          };
-        }));
+            address: pickupAddr,
+            type: 'pickup'
+          });
 
-        const optimizedData = await RoutingService.optimizeTrip(STATION_LOCATION, destinations);
+          // Điểm trả
+          const dropoffAddr = req.direction === "HOME_TO_STATION" ? req.dropoffLocation : req.pickupLocation;
+          const dropoffCoords = await RoutingService.geocode(dropoffAddr) || { lat: 10.7, lng: 106.6 };
+          allWaypoints.push({
+            ...dropoffCoords,
+            requestId: req._id,
+            address: dropoffAddr,
+            type: 'dropoff'
+          });
+        }
+
+        const optimizedData = await RoutingService.optimizeTrip(STATION_LOCATION, allWaypoints);
         const orderIndices = optimizedData.routes[0].optimizedIntermediateWaypointIndex ||
-          destinations.map((_, i) => i);
+          allWaypoints.map((_, i) => i);
 
         const route = orderIndices.map((originalIndex, order) => {
-          const dest = destinations[originalIndex];
+          const waypoint = allWaypoints[originalIndex];
           return {
-            requestId: dest.requestId,
-            location: dest.address,
-            type: dest.type,
+            requestId: waypoint.requestId,
+            location: waypoint.address,
+            type: waypoint.type,
             order: order + 1,
             status: 'pending'
           };

@@ -18,6 +18,6 @@ router.use(restrictTo("DRIVER"));
 
 router.get("/trips", tripController.getAllTrips);
 router.get("/trips/:id", tripController.getTripById);
-router.patch("/trips/:tripId/stop/:requestId", tripController.updateStopStatus);
+router.patch("/trips/:tripId/stop/:stopId", tripController.updateStopStatus);
 
 module.exports = router;

@@ -18,11 +18,11 @@ const tripSchema = new mongoose.Schema(
         // 🔥 Thêm location trực tiếp để dễ query + sync với passenger
         pickupLocation: {
             type: String,
-            required: true
+            required: false // Không bắt buộc vì đã có route chi tiết
         },
         dropoffLocation: {
             type: String,
-            required: true
+            required: false // Không bắt buộc vì đã có route chi tiết
         },
         route: [
             {

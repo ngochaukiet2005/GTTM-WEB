@@ -67,13 +67,20 @@ exports.dispatchTrips = async (req, res, next) => {
 // 3. Update Stop Status (Driver Action)
 exports.updateStopStatus = async (req, res, next) => {
   try {
-    const { tripId, requestId, status } = req.body; // status: picked_up, dropped_off, no_show
+    // 🔥 Sửa: Nhận stopId thay vì requestId để phân biệt điểm đón/trả
+    const { tripId, stopId } = req.params;
+    const { status } = req.body; // status: picked_up, dropped_off, no_show
 
     const trip = await Trip.findById(tripId);
     if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    const stopIndex = trip.route.findIndex(item => item.requestId.toString() === requestId);
+    // 🔥 Tìm điểm dừng dựa trên _id của subdocument trong mảng route
+    const stopIndex = trip.route.findIndex(item => item._id.toString() === stopId);
+
     if (stopIndex === -1) return res.status(404).json({ message: "Stop not found" });
+
+    // Lấy requestId từ điểm dừng tìm thấy để cập nhật trạng thái ShuttleRequest sau này
+    const requestId = trip.route[stopIndex].requestId;
 
     // Update Trip Route Status
     trip.route[stopIndex].status = status;

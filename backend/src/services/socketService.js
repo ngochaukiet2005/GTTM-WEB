@@ -2,7 +2,7 @@ let io = null;
 
 const init = (ioInstance) => {
     io = ioInstance;
-    
+
     io.on("connection", (socket) => {
         console.log(`✅ User connected: ${socket.id}`);
 
@@ -35,4 +35,12 @@ const notifyDriver = (driverId, event, data) => {
     }
 };
 
-module.exports = { init, getIO, notifyDriver };
+const emitWaypointStatus = (ioInstance, tripId, waypointIndex, status) => {
+    ioInstance.emit(`trip_${tripId}_waypoint`, { waypointIndex, status });
+};
+
+const emitTripStatus = (ioInstance, tripId, status) => {
+    ioInstance.emit(`trip_${tripId}_status`, { status });
+};
+
+module.exports = { init, getIO, notifyDriver, emitWaypointStatus, emitTripStatus };

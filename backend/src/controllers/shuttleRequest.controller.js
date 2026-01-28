@@ -1,7 +1,7 @@
 const ShuttleRequest = require("../models/shuttleRequest.model");
 const Passenger = require("../models/passenger.model");
 const mongoose = require("mongoose");
-const dispatchService = require("../services/dispatch.service"); // <--- [MỚI] Import Service
+const dispatchService = require("../services/dispatch.service.v2"); // 🔥 SỬ DỤNG V2
 
 exports.createRequest = async (req, res, next) => {
     try {
