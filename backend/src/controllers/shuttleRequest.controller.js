@@ -8,7 +8,8 @@ exports.createRequest = async (req, res, next) => {
             pickupLocation,
             dropoffLocation,
             direction,
-            timeSlot
+            timeSlot, // Frontend gửi lên dạng chuỗi: "02:00 - 03:00"
+            tripDate  // Frontend gửi thêm ngày: "2026-01-30"
         } = req.body;
 
         const userId = req.user.id;
@@ -16,9 +17,38 @@ exports.createRequest = async (req, res, next) => {
         // 1. Validate input
         if (!ticketCode || !pickupLocation || !dropoffLocation || !direction || !timeSlot) {
             return res.status(400).json({
-                message: "Missing required fields"
+                message: "Vui lòng điền đầy đủ thông tin: Vé, Điểm đón/trả, Giờ đi"
             });
         }
+
+        // --- BẮT ĐẦU SỬA LỖI 500 TẠI ĐÂY ---
+        // Mục tiêu: Chuyển chuỗi "02:00 - 03:00" thành đối tượng Date hợp lệ
+        let finalTimeSlotDate;
+        try {
+            // Lấy giờ bắt đầu (ví dụ "02:00")
+            const startTimeStr = timeSlot.split(" - ")[0].trim(); // "02:00"
+            
+            // Nếu có ngày đi (tripDate), ghép lại thành chuỗi ISO: "2026-01-30T02:00:00"
+            if (tripDate) {
+                finalTimeSlotDate = new Date(`${tripDate}T${startTimeStr}:00`);
+            } else {
+                // Nếu không có ngày, dùng ngày hiện tại làm mặc định
+                const now = new Date();
+                const [hours, minutes] = startTimeStr.split(':');
+                finalTimeSlotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+            }
+
+            // Kiểm tra lại xem Date có hợp lệ không
+            if (isNaN(finalTimeSlotDate.getTime())) {
+                throw new Error("Invalid Date generated");
+            }
+        } catch (err) {
+            console.error("Lỗi xử lý thời gian:", err);
+            return res.status(400).json({ 
+                message: "Định dạng thời gian không hợp lệ. Vui lòng thử lại." 
+            });
+        }
+        // --- KẾT THÚC SỬA LỖI ---
 
         // 2. Ensure passenger exists
         let passenger = await Passenger.findOne({ userId });
@@ -37,7 +67,7 @@ exports.createRequest = async (req, res, next) => {
             pickupLocation,
             dropoffLocation,
             direction,
-            timeSlot,
+            timeSlot: finalTimeSlotDate, // Lưu Date object chuẩn thay vì chuỗi
             status: "waiting"
         });
 
@@ -46,6 +76,7 @@ exports.createRequest = async (req, res, next) => {
             data: shuttleRequest
         });
     } catch (error) {
+        console.error("Create Request Error:", error); // Log lỗi ra terminal để dễ debug
         next(error);
     }
 };
@@ -83,6 +114,12 @@ exports.getRequestStatus = async (req, res, next) => {
                 };
             }
 
+            // Format lại timeSlot khi trả về Frontend để hiển thị đẹp (HH:mm)
+            const d = new Date(reqItem.timeSlot);
+            const timeString = !isNaN(d.getTime()) 
+                ? `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}` 
+                : "N/A";
+
             return {
                 id: reqItem._id,
                 ticketCode: reqItem.ticketCode,
@@ -90,7 +127,8 @@ exports.getRequestStatus = async (req, res, next) => {
                 direction: reqItem.direction,
                 pickupLocation: reqItem.pickupLocation,
                 dropoffLocation: reqItem.dropoffLocation,
-                timeSlot: reqItem.timeSlot,
+                timeSlot: timeString, // Trả về chuỗi giờ dễ đọc
+                fullTime: reqItem.timeSlot,
                 tripInfo
             };
         });

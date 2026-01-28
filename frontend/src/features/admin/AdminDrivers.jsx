@@ -21,6 +21,8 @@ const AdminDrivers = () => {
       html:
         '<input id="swal-name" class="swal2-input" placeholder="Họ và tên">' +
         '<input id="swal-phone" class="swal2-input" placeholder="Số điện thoại">' +
+        '<input id="swal-email" class="swal2-input" placeholder="Email">' +
+        '<input id="swal-password" class="swal2-input" placeholder="Mật khẩu">' +
         '<input id="swal-plate" class="swal2-input" placeholder="Biển số xe (VD: 59X1-123.45)">',
       focusConfirm: false,
       showCancelButton: true,
@@ -29,6 +31,8 @@ const AdminDrivers = () => {
         return {
           name: document.getElementById('swal-name').value,
           phone: document.getElementById('swal-phone').value,
+          email: document.getElementById('swal-email').value,
+          password: document.getElementById('swal-password').value,
           plate: document.getElementById('swal-plate').value
         }
       }

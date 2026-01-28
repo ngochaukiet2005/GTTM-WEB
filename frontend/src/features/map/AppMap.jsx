@@ -5,12 +5,10 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } 
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// --- SOCKET IMPORT (Thay thế Firebase) ---
+// --- SOCKET IMPORT ---
 import { io } from "socket.io-client";
 
 // --- 1. CẤU HÌNH ICON ---
-
-// Icon User: Chấm tròn xanh
 const userDotIcon = L.divIcon({
     className: 'gps-user-marker', 
     iconSize: [20, 20],           
@@ -18,7 +16,6 @@ const userDotIcon = L.divIcon({
     popupAnchor: [0, -10]         
 });
 
-// Icon Xe Bus/Tài xế
 const driverIcon = L.divIcon({
     html: `<div style="font-size: 24px; filter: drop-shadow(2px 4px 6px black);">🚌</div>`,
     className: 'driver-marker',
@@ -27,7 +24,6 @@ const driverIcon = L.divIcon({
     popupAnchor: [0, -15]
 });
 
-// Icon Ghim
 const createPinIcon = (color) => new L.Icon({
     iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -40,30 +36,25 @@ const createPinIcon = (color) => new L.Icon({
 const selectedIcon = createPinIcon('green'); 
 const stationIcon = createPinIcon('gold');  
 
-// --- 2. MAP CONTROLLER & EVENTS ---
-
+// --- 2. MAP CONTROLLER ---
 const MapController = ({ center, userPos, isTracking, onDragStart }) => {
     const map = useMap();
     const prevPosRef = useRef(null);
 
-    // Xử lý sự kiện kéo map để tắt tracking
     useMapEvents({
         dragstart: () => {
             onDragStart && onDragStart();
         },
-        click: (e) => {
-           // Logic click map nếu cần
-        }
     });
 
     useEffect(() => {
-        // Ưu tiên 1: Bay đến điểm chọn (CHỈ KHI CÓ LAT/LNG HỢP LỆ)
+        // Ưu tiên 1: Bay đến điểm chọn
         if (center && typeof center.lat === 'number' && typeof center.lng === 'number' && !isTracking) {
              map.flyTo([center.lat, center.lng], 16, { animate: true, duration: 1.0 });
              return;
         }
 
-        // Ưu tiên 2: Bám theo User (Tracking Mode)
+        // Ưu tiên 2: Bám theo User
         if (isTracking && userPos && typeof userPos.lat === 'number') {
             const shouldMove = !prevPosRef.current || 
                 map.distance([userPos.lat, userPos.lng], prevPosRef.current) > 2;
@@ -79,90 +70,104 @@ const MapController = ({ center, userPos, isTracking, onDragStart }) => {
 };
 
 // --- MAIN COMPONENT ---
-
 const AppMap = ({ 
     stationLocation,    
     selectedLocation,   
     onLocationSelect,
-    driverId // ID tài xế để theo dõi
+    driverId 
 }) => {
     const [currentPos, setCurrentPos] = useState(null); 
     const [driverPos, setDriverPos] = useState(null); 
     const [isTracking, setIsTracking] = useState(true); 
-    const watchIdRef = useRef(null);
     
-    // Ref giữ kết nối socket
+    // Ref quản lý socket và watchId
+    const watchIdRef = useRef(null);
     const socketRef = useRef(null);
 
-    // Mặc định hiển thị Bến xe Miền Tây nếu chưa có vị trí
+    // Mặc định: Bến xe Miền Tây
     const defaultCenter = [10.742336, 106.613876]; 
 
-    // --- LOGIC GPS USER ---
+    // --- LOGIC GPS THÔNG MINH (Smart Geolocation) ---
     useEffect(() => {
         if (!navigator.geolocation) {
             console.error("Trình duyệt không hỗ trợ GPS");
             return;
         }
 
-        const geoOptions = { 
-            enableHighAccuracy: true,
-            timeout: 10000,           
-            maximumAge: 0             
+        // Hàm khởi tạo việc theo dõi vị trí
+        const startWatchingPosition = (useHighAccuracy = true) => {
+            // Xóa watch cũ nếu có để tránh chạy song song
+            if (watchIdRef.current !== null) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+            }
+
+            console.log(`📡 Đang thử lấy vị trí. Chế độ chính xác cao: ${useHighAccuracy ? 'BẬT' : 'TẮT'}`);
+
+            const options = {
+                enableHighAccuracy: useHighAccuracy, // Thử true trước, nếu lỗi sẽ false
+                timeout: useHighAccuracy ? 15000 : 10000, // GPS cần nhiều thời gian hơn (15s)
+                maximumAge: 0 
+            };
+
+            watchIdRef.current = navigator.geolocation.watchPosition(
+                (position) => {
+                    // THÀNH CÔNG
+                    const { latitude, longitude, accuracy, heading } = position.coords;
+                    setCurrentPos({ lat: latitude, lng: longitude, accuracy, heading });
+                },
+                (err) => {
+                    // THẤT BẠI
+                    console.warn(`⚠️ Lỗi GPS (${useHighAccuracy ? 'High' : 'Low'} Accuracy):`, err.message);
+
+                    // Nếu đang dùng High Accuracy mà bị Timeout (code 3) hoặc Không khả dụng (code 2)
+                    // -> Tự động chuyển sang Low Accuracy (Wifi/Network)
+                    if (useHighAccuracy && (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE)) {
+                        console.log("🔄 Đang chuyển sang chế độ định vị bằng Wifi/Network...");
+                        startWatchingPosition(false); // Đệ quy gọi lại với false
+                    }
+                },
+                options
+            );
         };
 
-        const success = (position) => {
-            const { latitude, longitude, accuracy, heading } = position.coords;
-            setCurrentPos({ lat: latitude, lng: longitude, accuracy, heading });
-        };
-
-        const error = (err) => {
-            console.warn("Lỗi GPS:", err.message);
-        };
-
-        watchIdRef.current = navigator.geolocation.watchPosition(success, error, geoOptions);
+        // Bắt đầu với chế độ chính xác cao nhất
+        startWatchingPosition(true);
 
         return () => {
-            if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+            if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
         };
     }, []);
 
-    // --- LOGIC TRACKING TÀI XẾ (SOCKET.IO) ---
+    // --- LOGIC TRACKING TÀI XẾ ---
     useEffect(() => {
         if (!driverId) {
             setDriverPos(null);
             return;
         }
 
-        // 1. Kết nối đến Server Socket (Backend đang chạy port 5000)
-        // Lưu ý: Cấu hình URL này nên đưa vào biến môi trường trong thực tế
-        socketRef.current = io("http://localhost:5000");
+        const socketUrl = import.meta.env.VITE_API_URL 
+            ? import.meta.env.VITE_API_URL.replace('/api', '') 
+            : "http://localhost:5000";
 
-        // 2. Lắng nghe sự kiện cập nhật vị trí
+        socketRef.current = io(socketUrl);
         const eventName = `driver_location_${driverId}`;
         
         socketRef.current.on(eventName, (data) => {
-            // console.log("⚡ Socket Update:", data);
             if (data && data.lat && data.lng) {
                 setDriverPos({ lat: data.lat, lng: data.lng });
             }
         });
 
-        // 3. Cleanup khi component unmount hoặc đổi tài xế
         return () => {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-            }
+            if (socketRef.current) socketRef.current.disconnect();
         };
     }, [driverId]);
 
-    // Tự động tắt tracking khi người dùng chọn một điểm khác trên map
+    // Tắt tracking khi chọn điểm khác
     useEffect(() => {
-        if (selectedLocation) {
-            setIsTracking(false);
-        }
+        if (selectedLocation) setIsTracking(false);
     }, [selectedLocation]);
 
-    // Xử lý click chọn điểm trên map
     const MapClickHandler = () => {
         useMapEvents({
             click(e) {
@@ -175,7 +180,6 @@ const AppMap = ({
         return null;
     };
 
-    // Tính toán tâm khởi tạo an toàn
     const initialCenter = (currentPos && currentPos.lat) ? [currentPos.lat, currentPos.lng] : defaultCenter;
 
     return (
@@ -200,14 +204,14 @@ const AppMap = ({
                     onDragStart={() => setIsTracking(false)} 
                 />
 
-                {/* 1. ĐIỂM CỐ ĐỊNH (Bến xe) */}
+                {/* 1. ĐIỂM CỐ ĐỊNH */}
                 {stationLocation && stationLocation.lat && (
                     <Marker position={[stationLocation.lat, stationLocation.lng]} icon={stationIcon}>
                         <Popup><b>🏁 {stationLocation.address || "Điểm mốc"}</b></Popup>
                     </Marker>
                 )}
 
-                {/* 2. VỊ TRÍ USER (Realtime) */}
+                {/* 2. VỊ TRÍ USER */}
                 {currentPos && (
                     <>
                         <Circle 
@@ -220,12 +224,17 @@ const AppMap = ({
                             icon={userDotIcon} 
                             zIndexOffset={1000}
                         >
-                            <Popup>Bạn đang ở đây</Popup>
+                            <Popup>
+                                <div className="text-center">
+                                    <b>Bạn đang ở đây</b><br/>
+                                    <span className="text-xs text-gray-500">Độ chính xác: {Math.round(currentPos.accuracy)}m</span>
+                                </div>
+                            </Popup>
                         </Marker>
                     </>
                 )}
 
-                {/* 3. VỊ TRÍ TÀI XẾ (REALTIME SOCKET) */}
+                {/* 3. VỊ TRÍ TÀI XẾ */}
                 {driverPos && (
                     <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon} zIndexOffset={900}>
                         <Popup>
@@ -245,7 +254,6 @@ const AppMap = ({
                 )}
             </MapContainer>
 
-            {/* Nút "Bám theo tôi" */}
             {!isTracking && (
                 <button
                     onClick={(e) => {
